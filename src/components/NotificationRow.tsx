@@ -523,6 +523,7 @@ function buildMessage({
           <>
             {muted("Your post reached ")}
             {bold(`${lvl} star${lvl === 1 ? "" : "s"}`)}
+            {muted("!")}
           </>
         ),
         iconOnly: <SolidIcon type="star" tone="yellow" />,
