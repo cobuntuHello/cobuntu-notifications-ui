@@ -47,5 +47,4 @@ export {
 export { SectionHeader } from "./components/SectionHeader";
 export { EmptyState } from "./components/EmptyState";
 export { NotificationRow } from "./components/NotificationRow";
-
-// NotificationsView lands in PR 4.
+export { NotificationsView } from "./components/NotificationsView";
