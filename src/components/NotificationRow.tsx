@@ -40,25 +40,40 @@ export function NotificationRow({ item, adapter, renderAvatar, now }: Notificati
   // The legacy panel + the widget bundle resolve via the same per-type
   // dispatch, so this branch is the canonical source of truth.
 
+  // Some consumers' API layer flattens a `n.actor` projection onto the
+  // row for FE convenience. When type-specific payload keys aren't
+  // populated we fall back to it before settling on "Someone".
+  const rowActor = (n as any).actor as
+    | { name?: string | null; usertag?: string | null; profileImage?: string | null; avatarUrl?: string | null; isVerified?: boolean | null }
+    | null
+    | undefined;
+  const fallbackName = rowActor?.name || (payload.actorName as string | undefined) || "Someone";
+  const fallbackUsertag = rowActor?.usertag || (payload.actorUsertag as string | undefined) || null;
+  const fallbackImage = rowActor?.profileImage || rowActor?.avatarUrl
+    || (payload.actorImage as string | undefined)
+    || (payload.actorImageUrl as string | undefined)
+    || null;
+  const fallbackVerified = rowActor?.isVerified ?? null;
+
   const actor: NotificationActorView = (() => {
     switch (n.type) {
       case "FRIEND_REQUEST_INBOUND": {
         const u = payload.fromUser as Record<string, unknown> | undefined;
         return {
-          name: (u?.name as string) || (u?.usertag as string) || "Someone",
-          usertag: (u?.usertag as string) || null,
-          imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || null,
-          isVerified: (u?.isVerified as boolean) ?? null,
+          name: (u?.name as string) || (u?.usertag as string) || fallbackName,
+          usertag: (u?.usertag as string) || fallbackUsertag,
+          imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || fallbackImage,
+          isVerified: (u?.isVerified as boolean) ?? fallbackVerified,
         };
       }
       case "FRIEND_REQUEST_ACCEPTED":
       case "FRIENDSHIP_CONFIRMED": {
         const u = payload.byUser as Record<string, unknown> | undefined;
         return {
-          name: (u?.name as string) || (u?.usertag as string) || "Someone",
-          usertag: (u?.usertag as string) || null,
-          imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || null,
-          isVerified: (u?.isVerified as boolean) ?? null,
+          name: (u?.name as string) || (u?.usertag as string) || fallbackName,
+          usertag: (u?.usertag as string) || fallbackUsertag,
+          imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || fallbackImage,
+          isVerified: (u?.isVerified as boolean) ?? fallbackVerified,
         };
       }
       case "MEMBERSHIP_REQUEST":
@@ -66,56 +81,56 @@ export function NotificationRow({ item, adapter, renderAvatar, now }: Notificati
         const u = (payload.byUser as Record<string, unknown> | undefined)
           || (payload.applicant as Record<string, unknown> | undefined);
         return {
-          name: (u?.name as string) || (payload.actorName as string) || "Someone",
-          usertag: (u?.usertag as string) || null,
-          imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || (payload.actorImage as string) || null,
-          isVerified: (u?.isVerified as boolean) ?? null,
+          name: (u?.name as string) || fallbackName,
+          usertag: (u?.usertag as string) || fallbackUsertag,
+          imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || fallbackImage,
+          isVerified: (u?.isVerified as boolean) ?? fallbackVerified,
         };
       }
       case "POST_REACTED":
         return {
-          name: (payload.reactorName as string) || (payload.likerName as string) || "Someone",
-          usertag: (payload.reactorUsertag as string) || (payload.likerUsertag as string) || null,
-          imageUrl: (payload.reactorAvatarUrl as string) || (payload.likerAvatarUrl as string) || null,
-          isVerified: (payload.reactorIsVerified as boolean) || (payload.likerIsVerified as boolean) || null,
+          name: (payload.reactorName as string) || (payload.likerName as string) || fallbackName,
+          usertag: (payload.reactorUsertag as string) || (payload.likerUsertag as string) || fallbackUsertag,
+          imageUrl: (payload.reactorAvatarUrl as string) || (payload.likerAvatarUrl as string) || fallbackImage,
+          isVerified: (payload.reactorIsVerified as boolean) || (payload.likerIsVerified as boolean) || fallbackVerified,
         };
       case "POST_COMMENTED":
         return {
-          name: (payload.commenterName as string) || "Someone",
-          usertag: (payload.commenterUsertag as string) || null,
-          imageUrl: (payload.commenterAvatarUrl as string) || null,
-          isVerified: (payload.commenterIsVerified as boolean) ?? null,
+          name: (payload.commenterName as string) || fallbackName,
+          usertag: (payload.commenterUsertag as string) || fallbackUsertag,
+          imageUrl: (payload.commenterAvatarUrl as string) || fallbackImage,
+          isVerified: (payload.commenterIsVerified as boolean) ?? fallbackVerified,
         };
       case "POST_COMMENT_REPLY":
         return {
-          name: (payload.replierName as string) || "Someone",
-          usertag: (payload.replierUsertag as string) || null,
-          imageUrl: (payload.replierAvatarUrl as string) || null,
-          isVerified: (payload.replierIsVerified as boolean) ?? null,
+          name: (payload.replierName as string) || fallbackName,
+          usertag: (payload.replierUsertag as string) || fallbackUsertag,
+          imageUrl: (payload.replierAvatarUrl as string) || fallbackImage,
+          isVerified: (payload.replierIsVerified as boolean) ?? fallbackVerified,
         };
       case "POST_COMMENT_LIKED":
         return {
-          name: (payload.likerName as string) || "Someone",
-          usertag: (payload.likerUsertag as string) || null,
-          imageUrl: (payload.likerAvatarUrl as string) || null,
-          isVerified: (payload.likerIsVerified as boolean) ?? null,
+          name: (payload.likerName as string) || fallbackName,
+          usertag: (payload.likerUsertag as string) || fallbackUsertag,
+          imageUrl: (payload.likerAvatarUrl as string) || fallbackImage,
+          isVerified: (payload.likerIsVerified as boolean) ?? fallbackVerified,
         };
       case "POST_MENTIONED":
       case "FEED_MENTIONED": {
         const author = payload.author as Record<string, unknown> | undefined;
         return {
-          name: (author?.name as string) || (payload.actorName as string) || "Someone",
-          usertag: (author?.usertag as string) || null,
-          imageUrl: (author?.avatarUrl as string) || (author?.profileImage as string) || null,
-          isVerified: (author?.isVerified as boolean) ?? null,
+          name: (author?.name as string) || fallbackName,
+          usertag: (author?.usertag as string) || fallbackUsertag,
+          imageUrl: (author?.avatarUrl as string) || (author?.profileImage as string) || fallbackImage,
+          isVerified: (author?.isVerified as boolean) ?? fallbackVerified,
         };
       }
       default:
         return {
-          name: (payload.actorName as string) || "Someone",
-          usertag: (payload.actorUsertag as string) || null,
-          imageUrl: (payload.actorImage as string) || (payload.actorImageUrl as string) || null,
-          isVerified: null,
+          name: fallbackName,
+          usertag: fallbackUsertag,
+          imageUrl: fallbackImage,
+          isVerified: fallbackVerified,
         };
     }
   })();

@@ -43,6 +43,13 @@ export interface Notification {
    * `payload.postSnippet`, `payload.postMediaUrl`, etc.
    */
   payload: Record<string, unknown> | null;
+  /**
+   * Optional row-root actor projection. Some consumers' API layer flatten
+   * the actor onto the row for FE convenience; the row dispatcher falls
+   * back to this when type-specific payload keys (e.g. `reactorName`)
+   * aren't populated. Strictly optional — the BE may not emit it.
+   */
+  actor?: { id?: string | null; name?: string | null; profileImage?: string | null; avatarUrl?: string | null; usertag?: string | null; isVerified?: boolean | null } | null;
   createdAt: string;
   readAt?: string | null;
   userId?: string | null;
