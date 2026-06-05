@@ -36,4 +36,16 @@ export {
   type NotificationGroup,
 } from "./utils/groupNotifications";
 
-// Components land in PRs 3-4.
+// ─── Components (PR 3) ────────────────────────────────────────────
+export { Avatar } from "./components/Avatar";
+export { VerifiedBadge } from "./components/VerifiedBadge";
+export {
+  NotificationAvatarBadge,
+  renderActorNames,
+  type NotificationActorView,
+} from "./components/NotificationAvatarBadge";
+export { SectionHeader } from "./components/SectionHeader";
+export { EmptyState } from "./components/EmptyState";
+export { NotificationRow } from "./components/NotificationRow";
+
+// NotificationsView lands in PR 4.
