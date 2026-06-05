@@ -25,6 +25,15 @@ export type {
   NotificationsDataSource,
 } from "./types";
 
-// Public components + utils land here in PRs 2-4. Re-exports are
-// scaffolded as the work lands so consumers can pin to a working SHA
-// at every checkpoint.
+// ─── Utilities (PR 2) ─────────────────────────────────────────────
+export { getTimeSection } from "./utils/getTimeSection";
+export { formatTimeAgo } from "./utils/formatTimeAgo";
+export { cleanMentionMarkup } from "./utils/cleanMentionMarkup";
+export {
+  groupNotifications,
+  formatActorNames,
+  type DisplayItem,
+  type NotificationGroup,
+} from "./utils/groupNotifications";
+
+// Components land in PRs 3-4.
