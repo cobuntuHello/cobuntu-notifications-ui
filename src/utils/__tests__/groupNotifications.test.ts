@@ -99,7 +99,7 @@ describe("groupNotifications", () => {
     expect(formatGroupSummary(group.kindCounts)).toBe("2 reactions and 2 comments");
   });
 
-  it("groups POST_MENTIONED on the same post alongside reactions/comments", () => {
+  it("does NOT group POST_MENTIONED — a mention stays a bare notification even when reactions/comments exist on the same post", () => {
     const items = [
       makeNotif({ id: "n3", type: "POST_MENTIONED", payload: { postId: "p9", author: { name: "Zoe" } } }),
       makeNotif({ id: "n2", type: "POST_REACTED", payload: { postId: "p9", reactorName: "Ana" } }),
@@ -107,14 +107,26 @@ describe("groupNotifications", () => {
     ];
 
     const result = groupNotifications(items);
-    expect(result).toHaveLength(1);
-    const group = result[0] as NotificationGroup;
+    // The mention is standalone; the reaction + comment still fold → 2 items.
+    expect(result).toHaveLength(2);
+
+    // The mention renders as its own bare notification, NOT folded in.
+    const mention = result.find(
+      (r) => !("isGroup" in r && r.isGroup) && (r as Notification).type === "POST_MENTIONED",
+    ) as Notification | undefined;
+    expect(mention).toBeDefined();
+    expect(mention!.id).toBe("n3");
+
+    // The ambient reaction/comment group carries NO mention kind.
+    const group = result.find((r) => "isGroup" in r && r.isGroup) as NotificationGroup;
+    expect(group).toBeDefined();
+    expect(group.notifications).toHaveLength(2);
     expect(group.kindCounts).toEqual([
       { kind: "reaction", count: 1 },
       { kind: "comment", count: 1 },
-      { kind: "mention", count: 1 },
     ]);
-    expect(formatGroupSummary(group.kindCounts)).toBe("1 reaction, 1 comment and 1 mention");
+    expect(group.kindCounts.some((k) => k.kind === "mention")).toBe(false);
+    expect(formatGroupSummary(group.kindCounts)).toBe("1 reaction and 1 comment");
   });
 
   it("keeps a single-kind group's kindCounts to one entry (no mixed summary)", () => {

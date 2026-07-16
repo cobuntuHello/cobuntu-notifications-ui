@@ -1,21 +1,26 @@
 import type { Notification, NotificationType } from "../types";
 
 /**
- * Post-activity notification types. ALL activity on the SAME post
- * (reactions, comments, replies, comment-likes, mentions) that carry
- * the same `payload.postId` collapse into ONE group per post — e.g.
+ * Post-activity notification types. Ambient activity on the SAME post
+ * (reactions, comments, replies, comment-likes) that carry the same
+ * `payload.postId` collapse into ONE group per post — e.g.
  * "12 reactions and 3 comments on your post".
  *
  * (Before PR-2 only same-TYPE reactions folded together — the group key
  * was `type + postId`. Now the fold is per-post ACROSS kinds, so the key
  * is post-only and the row summarizes the mix by kind.)
+ *
+ * POST_MENTIONED is DELIBERATELY excluded: a mention of the user is a
+ * direct, personal signal (someone @-tagged you), not ambient reactions —
+ * so it NEVER collapses into a post's grouped row and always renders as
+ * its own standalone notification, even when reactions/comments exist on
+ * the same post.
  */
 const POST_ACTIVITY_TYPES: NotificationType[] = [
   "POST_REACTED",
   "POST_COMMENTED",
   "POST_COMMENT_REPLY",
   "POST_COMMENT_LIKED",
-  "POST_MENTIONED",
 ];
 
 /** Coarse buckets used for the grouped-row summary line. */

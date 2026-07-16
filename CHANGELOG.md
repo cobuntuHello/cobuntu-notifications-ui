@@ -4,6 +4,16 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.2.0 — 2026-07-16
+
+Notifications redesign, PR-3. Backward-compatible: all existing exports and props preserved; the new prop is optional and defaults to today's behavior.
+
+### Changed
+- **Mentions no longer fold into post groups.** `groupNotifications` no longer treats `POST_MENTIONED` as ambient post activity — a mention of the user is a direct, personal signal, so it NEVER collapses into a post's grouped row and always renders as its own standalone notification, even when reactions/comments exist on the same post. Reaction / comment / reply / comment-like grouping is unchanged.
+
+### Added
+- **Flat New/Earlier layout.** New optional `layout?: "tabs" | "flat"` on `NotificationsView` (default `"tabs"` ⇒ existing Activity/Requests tabs + time-based section headers, unchanged). With `layout="flat"`, the component ignores `activeTab` and the Activity/Requests split, groups the FULL list, and renders a single unified list split into two read-status sections: **New** (any unread item; actionable requests — `FRIEND_REQUEST_INBOUND` / `MEMBERSHIP_REQUEST` — pinned to the top) and **Earlier** (fully read). Newest-first order is preserved within each section, there are NO time buckets ("Today" / "Yesterday" / …), and the empty state reads "You're all caught up". `onMuteThread`, `renderAvatar`, and `now` are forwarded to rows exactly as in the tabs path.
+
 ## 1.1.0 — 2026-07-16
 
 Notifications redesign, PR-2 (row-level). Backward-compatible: all existing exports and props preserved; new props are optional.
