@@ -1,22 +1,68 @@
 import type { Notification, NotificationType } from "../types";
 
 /**
- * Notification types that should be grouped when multiple notifications
- * target the same post. e.g. "Becky, Ana and 3 others reacted to your post"
+ * Post-activity notification types. ALL activity on the SAME post
+ * (reactions, comments, replies, comment-likes, mentions) that carry
+ * the same `payload.postId` collapse into ONE group per post — e.g.
+ * "12 reactions and 3 comments on your post".
+ *
+ * (Before PR-2 only same-TYPE reactions folded together — the group key
+ * was `type + postId`. Now the fold is per-post ACROSS kinds, so the key
+ * is post-only and the row summarizes the mix by kind.)
  */
-const GROUPABLE_TYPES: NotificationType[] = [
+const POST_ACTIVITY_TYPES: NotificationType[] = [
   "POST_REACTED",
   "POST_COMMENTED",
   "POST_COMMENT_REPLY",
   "POST_COMMENT_LIKED",
+  "POST_MENTIONED",
 ];
+
+/** Coarse buckets used for the grouped-row summary line. */
+export type PostActivityKind = "reaction" | "comment" | "mention";
+
+const TYPE_TO_KIND: Record<string, PostActivityKind> = {
+  POST_REACTED: "reaction",
+  POST_COMMENT_LIKED: "reaction",
+  POST_COMMENTED: "comment",
+  POST_COMMENT_REPLY: "comment",
+  POST_MENTIONED: "mention",
+};
+
+/** Display order + singular/plural nouns for each bucket. */
+const KIND_ORDER: PostActivityKind[] = ["reaction", "comment", "mention"];
+const KIND_NOUN: Record<PostActivityKind, { one: string; many: string }> = {
+  reaction: { one: "reaction", many: "reactions" },
+  comment: { one: "comment", many: "comments" },
+  mention: { one: "mention", many: "mentions" },
+};
+
+export interface GroupActor {
+  name: string;
+  usertag?: string;
+  isVerified?: boolean;
+  /** Added PR-2 so grouped stacked avatars can show real images, not just initials. */
+  imageUrl?: string | null;
+}
+
+export interface KindCount {
+  kind: PostActivityKind;
+  count: number;
+}
 
 export interface NotificationGroup {
   isGroup: true;
   id: string;
   groupType: NotificationType;
   notifications: Notification[];
-  actors: { name: string; usertag?: string; isVerified?: boolean }[];
+  actors: GroupActor[];
+  /**
+   * Per-kind event counts (reactions / comments / mentions) in display
+   * order, only kinds with count > 0. `length > 1` ⇒ MIXED group ⇒ the
+   * row renders the "N reactions and M comments on your post" summary
+   * instead of the single-kind "<names> reacted to your post" phrasing.
+   */
+  kindCounts: KindCount[];
   postId: string;
   createdAt: string;
   payload: Record<string, unknown>;
@@ -25,10 +71,12 @@ export interface NotificationGroup {
 export type DisplayItem = (Notification & { isGroup?: false }) | NotificationGroup;
 
 function getGroupKey(n: Notification): string | null {
-  if (!GROUPABLE_TYPES.includes(n.type)) return null;
+  if (!POST_ACTIVITY_TYPES.includes(n.type)) return null;
   const postId = (n.payload as any)?.postId;
   if (!postId) return null;
-  return `${n.type}_${postId}`;
+  // Post-only key (NOT type + post) so reactions, comments, replies,
+  // comment-likes and mentions on the same post fold into ONE group.
+  return `post_${postId}`;
 }
 
 /**
@@ -37,9 +85,10 @@ function getGroupKey(n: Notification): string | null {
  * normalized these), so the dispatcher reads the type-specific keys
  * then falls back to "Someone" if all of them are null — the prior
  * mobile-drawer "Someone everywhere" symptom came from rendering with
- * no per-type dispatch at all.
+ * no per-type dispatch at all. Mirrors NotificationRow's per-type actor
+ * resolution so grouped avatars match the ungrouped rows.
  */
-function extractActor(n: Notification): { name: string; usertag?: string; isVerified?: boolean } {
+function extractActor(n: Notification): GroupActor {
   const p = (n.payload || {}) as any;
   switch (n.type) {
     case "POST_REACTED":
@@ -47,20 +96,45 @@ function extractActor(n: Notification): { name: string; usertag?: string; isVeri
         name: p.reactorName || p.likerName || "Someone",
         usertag: p.reactorUsertag || p.likerUsertag,
         isVerified: p.reactorIsVerified || p.likerIsVerified,
+        imageUrl: p.reactorAvatarUrl || p.likerAvatarUrl || null,
       };
     case "POST_COMMENTED":
-      return { name: p.commenterName || "Someone", usertag: p.commenterUsertag, isVerified: p.commenterIsVerified };
+      return {
+        name: p.commenterName || "Someone",
+        usertag: p.commenterUsertag,
+        isVerified: p.commenterIsVerified,
+        imageUrl: p.commenterAvatarUrl || null,
+      };
     case "POST_COMMENT_REPLY":
-      return { name: p.replierName || "Someone", usertag: p.replierUsertag, isVerified: p.replierIsVerified };
+      return {
+        name: p.replierName || "Someone",
+        usertag: p.replierUsertag,
+        isVerified: p.replierIsVerified,
+        imageUrl: p.replierAvatarUrl || null,
+      };
     case "POST_COMMENT_LIKED":
-      return { name: p.likerName || "Someone", usertag: p.likerUsertag, isVerified: p.likerIsVerified };
+      return {
+        name: p.likerName || "Someone",
+        usertag: p.likerUsertag,
+        isVerified: p.likerIsVerified,
+        imageUrl: p.likerAvatarUrl || null,
+      };
+    case "POST_MENTIONED": {
+      const a = (p.author || {}) as any;
+      return {
+        name: a.name || "Someone",
+        usertag: a.usertag,
+        isVerified: a.isVerified,
+        imageUrl: a.avatarUrl || a.profileImage || null,
+      };
+    }
     default:
       return { name: "Someone" };
   }
 }
 
 /**
- * Groups notifications by type + postId. The group appears at the
+ * Groups post-activity notifications by postId. The group appears at the
  * position of the most recent notification (input must already be
  * sorted most-recent-first by the caller — the BE's
  * `/api/users/me/notifications` returns rows ordered by createdAt desc,
@@ -99,11 +173,11 @@ export function groupNotifications(notifications: Notification[]): DisplayItem[]
 
     const latest = group[0]; // input is sorted most-recent-first
 
-    // Deduplicate actors by name — the same person reacting to a post
-    // twice (rare but possible across edit cycles) shouldn't show up
-    // twice in the grouped display.
+    // Deduplicate actors by name — the same person acting on a post
+    // more than once (e.g. reacting then commenting) shouldn't show up
+    // twice in the stacked avatars.
     const seen = new Set<string>();
-    const actors: { name: string; usertag?: string; isVerified?: boolean }[] = [];
+    const actors: GroupActor[] = [];
     for (const n of group) {
       const actor = extractActor(n);
       if (!seen.has(actor.name)) {
@@ -112,12 +186,24 @@ export function groupNotifications(notifications: Notification[]): DisplayItem[]
       }
     }
 
+    // Tally EVENTS (not actors) per coarse kind for the summary line.
+    const tally = new Map<PostActivityKind, number>();
+    for (const n of group) {
+      const kind = TYPE_TO_KIND[n.type];
+      if (!kind) continue;
+      tally.set(kind, (tally.get(kind) || 0) + 1);
+    }
+    const kindCounts: KindCount[] = KIND_ORDER
+      .filter((k) => (tally.get(k) || 0) > 0)
+      .map((k) => ({ kind: k, count: tally.get(k)! }));
+
     result[idx] = {
       isGroup: true,
       id: `group_${key}`,
       groupType: latest.type as NotificationType,
       notifications: group,
       actors,
+      kindCounts,
       postId: (latest.payload as any).postId,
       createdAt: latest.createdAt,
       payload: latest.payload as Record<string, unknown>,
@@ -145,4 +231,23 @@ export function formatActorNames(actors: { name: string }[], maxNames = 2): stri
   const leading = actors.slice(0, maxNames).map((a) => a.name).join(", ");
   const remaining = actors.length - maxNames;
   return `${leading} and ${remaining} other${remaining > 1 ? "s" : ""}`;
+}
+
+/**
+ * Human summary line for a MIXED post group, e.g.
+ *   [{reaction,12},{comment,3}]           → "12 reactions and 3 comments"
+ *   [{reaction,1},{comment,2},{mention,1}] → "1 reaction, 2 comments and 1 mention"
+ *
+ * Single-kind groups keep the "<names> reacted to your post" phrasing
+ * and don't use this. Nouns pluralize on the individual count.
+ */
+export function formatGroupSummary(kindCounts: KindCount[]): string {
+  const parts = kindCounts.map(({ kind, count }) => {
+    const noun = count === 1 ? KIND_NOUN[kind].one : KIND_NOUN[kind].many;
+    return `${count} ${noun}`;
+  });
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }

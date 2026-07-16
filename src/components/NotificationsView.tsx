@@ -33,6 +33,13 @@ interface NotificationsViewProps {
   renderAvatar?: (props: { name: string; imageUrl: string | null; size: number }) => React.ReactNode;
   /** Test injection for deterministic relative-time + section labels. */
   now?: Date;
+  /**
+   * Optional "mute this thread" callback, forwarded to post-group rows.
+   * When provided, grouped post rows render an unobtrusive bell-off
+   * button that calls this with the postId (no network in the package).
+   * Absent ⇒ no mute button (backward compatible).
+   */
+  onMuteThread?: (postId: string) => void;
 }
 
 /**
@@ -57,6 +64,7 @@ export function NotificationsView({
   activeTab = "activity",
   renderAvatar,
   now,
+  onMuteThread,
 }: NotificationsViewProps) {
   const { notifications, isLoading } = data;
 
@@ -111,6 +119,7 @@ export function NotificationsView({
               adapter={adapter}
               renderAvatar={renderAvatar}
               now={now}
+              onMuteThread={onMuteThread}
             />
           );
         })}
@@ -120,7 +129,7 @@ export function NotificationsView({
 
   return (
     <div>
-      {renderWithSections(displayItems, adapter, renderAvatar, now)}
+      {renderWithSections(displayItems, adapter, renderAvatar, now, onMuteThread)}
     </div>
   );
 }
@@ -130,6 +139,7 @@ function renderWithSections(
   adapter: NotificationsAdapter,
   renderAvatar: NotificationsViewProps["renderAvatar"],
   now: Date | undefined,
+  onMuteThread: NotificationsViewProps["onMuteThread"],
 ) {
   let currentSection: string | null = null;
   const out: React.ReactNode[] = [];
@@ -152,6 +162,7 @@ function renderWithSections(
         adapter={adapter}
         renderAvatar={renderAvatar}
         now={now}
+        onMuteThread={onMuteThread}
       />,
     );
   }
