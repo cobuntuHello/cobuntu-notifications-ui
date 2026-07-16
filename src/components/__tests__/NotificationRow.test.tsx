@@ -2,6 +2,7 @@ import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { NotificationRow } from "../NotificationRow";
+import { groupNotifications, type NotificationGroup } from "../../utils/groupNotifications";
 import type { Notification } from "../../types";
 
 function makeNotif(overrides: Partial<Notification> & { type: string; payload?: any }): Notification {
@@ -112,6 +113,81 @@ describe("NotificationRow", () => {
     render(<NotificationRow item={item} adapter={{}} now={now} />);
     expect(screen.getByText(/New activity/i)).toBeInTheDocument();
     expect(screen.getByText("Ana")).toBeInTheDocument();
+  });
+
+  it("gives UNREAD rows a bolder weight + a neutral unread dot", () => {
+    const item = makeNotif({
+      type: "FRIEND_REQUEST_INBOUND",
+      status: "UNREAD",
+      payload: { fromUser: { name: "Simon" } },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    // Neutral unread dot is exposed to a11y as "Unread".
+    expect(screen.getByLabelText("Unread")).toBeInTheDocument();
+    // Message text is bolder on unread rows.
+    expect(container.querySelector("p.font-semibold")).not.toBeNull();
+  });
+
+  it("renders READ rows without the unread dot or bolder weight", () => {
+    const item = makeNotif({
+      type: "FRIEND_REQUEST_INBOUND",
+      status: "READ",
+      payload: { fromUser: { name: "Simon" } },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(screen.queryByLabelText("Unread")).not.toBeInTheDocument();
+    expect(container.querySelector("p.font-semibold")).toBeNull();
+  });
+
+  it("renders system (non-social) icons on a NEUTRAL grey circle, not a brand/semantic tint", () => {
+    const item = makeNotif({
+      type: "POST_REMOVED_FROM_COMMUNITY",
+      payload: { community: { name: "Desconversados" } },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    const iconSvg = container.querySelector("svg");
+    const circle = iconSvg?.parentElement as HTMLElement;
+    // Neutral grey fill (128,128,128); NOT the old red 239,68,68 tint.
+    expect(circle.style.background).toMatch(/128,\s*128,\s*128/);
+    expect(circle.style.background).not.toContain("239");
+  });
+
+  it("shows the mute button on a post-group ONLY when onMuteThread is provided, and fires it with the postId", () => {
+    const groups = groupNotifications([
+      makeNotif({ id: "n2", type: "POST_REACTED", payload: { postId: "p1", reactorName: "Ana" } }),
+      makeNotif({ id: "n1", type: "POST_REACTED", payload: { postId: "p1", reactorName: "Becky" } }),
+    ]);
+    const group = groups[0] as NotificationGroup;
+    expect(group.isGroup).toBe(true);
+
+    const onMuteThread = vi.fn();
+    const onPostClick = vi.fn();
+    const { rerender } = render(
+      <NotificationRow item={group} adapter={{ onPostClick }} onMuteThread={onMuteThread} now={now} />,
+    );
+    const muteBtn = screen.getByLabelText("Mute this thread");
+    fireEvent.click(muteBtn);
+    expect(onMuteThread).toHaveBeenCalledWith("p1");
+    // Clicking mute must NOT also trigger the row's deep-link.
+    expect(onPostClick).not.toHaveBeenCalled();
+
+    // Prop absent → no mute button (backward compatible).
+    rerender(<NotificationRow item={group} adapter={{ onPostClick }} now={now} />);
+    expect(screen.queryByLabelText("Mute this thread")).not.toBeInTheDocument();
+  });
+
+  it("stacks at most 3 grouped avatars and shows a '+N' overflow chip", () => {
+    const groups = groupNotifications([
+      makeNotif({ id: "n5", type: "POST_REACTED", payload: { postId: "p1", reactorName: "Ana" } }),
+      makeNotif({ id: "n4", type: "POST_REACTED", payload: { postId: "p1", reactorName: "Becky" } }),
+      makeNotif({ id: "n3", type: "POST_REACTED", payload: { postId: "p1", reactorName: "Carl" } }),
+      makeNotif({ id: "n2", type: "POST_REACTED", payload: { postId: "p1", reactorName: "Dee" } }),
+      makeNotif({ id: "n1", type: "POST_REACTED", payload: { postId: "p1", reactorName: "Eve" } }),
+    ]);
+    const group = groups[0] as NotificationGroup;
+    render(<NotificationRow item={group} adapter={{}} now={now} />);
+    // 5 distinct actors → 3 avatars shown + "+2".
+    expect(screen.getByText("+2")).toBeInTheDocument();
   });
 
   it("renders relative time using the injected `now` for deterministic snapshots", () => {

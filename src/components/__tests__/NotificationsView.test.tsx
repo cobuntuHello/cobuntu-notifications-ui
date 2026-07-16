@@ -1,6 +1,6 @@
 import React from "react";
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { NotificationsView } from "../NotificationsView";
 import type { Notification } from "../../types";
 
@@ -138,5 +138,50 @@ describe("NotificationsView", () => {
     expect(screen.getByText("Becky")).toBeInTheDocument();
     const reactedCount = screen.queryAllByText(/reacted to your post/i);
     expect(reactedCount).toHaveLength(1);
+  });
+
+  it("collapses MIXED activity on one post into a single grouped row with a combined summary", () => {
+    const items: Notification[] = [
+      makeNotif({ id: "2", type: "POST_COMMENTED", createdAt: "2026-06-05T12:01:00.000Z", payload: { postId: "p1", commenterName: "Becky" } }),
+      makeNotif({ id: "1", type: "POST_REACTED", createdAt: "2026-06-05T12:00:00.000Z", payload: { postId: "p1", reactorName: "Ana" } }),
+    ];
+
+    render(
+      <NotificationsView
+        data={{ notifications: items, isLoading: false, markAsRead: () => {}, refresh: () => {} }}
+        activeTab="activity"
+        now={now}
+      />,
+    );
+
+    // Collapsed: one combined summary, and NO per-item phrasing yet.
+    expect(screen.getByText(/1 reaction and 1 comment/i)).toBeInTheDocument();
+    expect(screen.queryByText(/reacted to your post/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/commented on your post/i)).not.toBeInTheDocument();
+
+    // Expand reveals the underlying individual notifications as sub-rows.
+    fireEvent.click(screen.getByText(/Show all/i));
+    expect(screen.getByText(/reacted to your post/i)).toBeInTheDocument();
+    expect(screen.getByText(/commented on your post/i)).toBeInTheDocument();
+  });
+
+  it("forwards onMuteThread to grouped post rows so the mute button fires with the postId", () => {
+    const onMuteThread = vi.fn();
+    const items: Notification[] = [
+      makeNotif({ id: "2", type: "POST_REACTED", createdAt: "2026-06-05T12:01:00.000Z", payload: { postId: "p7", reactorName: "Ana" } }),
+      makeNotif({ id: "1", type: "POST_REACTED", createdAt: "2026-06-05T12:00:00.000Z", payload: { postId: "p7", reactorName: "Becky" } }),
+    ];
+
+    render(
+      <NotificationsView
+        data={{ notifications: items, isLoading: false, markAsRead: () => {}, refresh: () => {} }}
+        activeTab="activity"
+        now={now}
+        onMuteThread={onMuteThread}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Mute this thread"));
+    expect(onMuteThread).toHaveBeenCalledWith("p7");
   });
 });

@@ -19,9 +19,10 @@ interface NotificationAvatarBadgeProps {
 
 /**
  * Avatar tile for a notification row. Single actor → one round avatar;
- * multi-actor groups → two stacked avatars with a hairline ring so the
- * stacking reads as overlap. Optional overlay badge sits bottom-right
- * (heart for reactions, etc.) — same pattern as the legacy renderer.
+ * multi-actor groups → up to THREE stacked avatars with a hairline ring
+ * so the stacking reads as overlap, plus a "+N" chip when more actors
+ * remain. Optional overlay badge sits bottom-right (heart for reactions,
+ * etc.) — same pattern as the legacy renderer.
  */
 export function NotificationAvatarBadge({
   actors,
@@ -32,37 +33,48 @@ export function NotificationAvatarBadge({
   if (actors.length === 0) return null;
 
   const isMultiple = actors.length > 1;
+  const shown = actors.slice(0, 3);
+  const overflow = actors.length - shown.length;
 
   return (
-    <div className="relative shrink-0 w-10 h-10">
+    <div className={`relative shrink-0 h-10 ${isMultiple ? "" : "w-10"}`}>
       {isMultiple ? (
-        <div className="flex -space-x-2">
-          <div
-            className="rounded-full"
-            style={{
-              boxShadow: "0 0 0 2px var(--bg-color, #fff)",
-              position: "relative",
-              zIndex: 1,
-            }}
-          >
-            <Avatar
-              name={actors[0].name}
-              imageUrl={actors[0].imageUrl}
-              size={24}
-              renderAvatar={renderAvatar}
-            />
-          </div>
-          <div
-            className="rounded-full"
-            style={{ boxShadow: "0 0 0 2px var(--bg-color, #fff)" }}
-          >
-            <Avatar
-              name={actors[1].name}
-              imageUrl={actors[1].imageUrl}
-              size={24}
-              renderAvatar={renderAvatar}
-            />
-          </div>
+        <div className="flex items-center -space-x-2 h-10">
+          {shown.map((a, i) => (
+            <div
+              key={i}
+              className="rounded-full"
+              style={{
+                boxShadow: "0 0 0 2px var(--bg-color, #fff)",
+                position: "relative",
+                zIndex: shown.length - i,
+              }}
+            >
+              <Avatar
+                name={a.name}
+                imageUrl={a.imageUrl}
+                size={24}
+                renderAvatar={renderAvatar}
+              />
+            </div>
+          ))}
+          {overflow > 0 && (
+            <div
+              className="rounded-full flex items-center justify-center shrink-0"
+              style={{
+                width: 24,
+                height: 24,
+                position: "relative",
+                background: "rgba(128,128,128,0.16)",
+                color: "var(--text-color, currentColor)",
+                fontSize: 10,
+                fontWeight: 600,
+                boxShadow: "0 0 0 2px var(--bg-color, #fff)",
+              }}
+            >
+              +{overflow}
+            </div>
+          )}
         </div>
       ) : (
         <Avatar

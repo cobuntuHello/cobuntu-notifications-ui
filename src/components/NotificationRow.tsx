@@ -9,7 +9,7 @@ import {
 import { VerifiedBadge } from "./VerifiedBadge";
 import { formatTimeAgo } from "../utils/formatTimeAgo";
 import { cleanMentionMarkup } from "../utils/cleanMentionMarkup";
-import type { NotificationGroup } from "../utils/groupNotifications";
+import { formatGroupSummary, type NotificationGroup } from "../utils/groupNotifications";
 
 interface NotificationRowProps {
   item: Notification | NotificationGroup;
@@ -17,6 +17,20 @@ interface NotificationRowProps {
   renderAvatar?: (props: { name: string; imageUrl: string | null; size: number }) => React.ReactNode;
   /** Test-injection hook for deterministic relative-time formatting. */
   now?: Date;
+  /**
+   * Optional "mute this thread" affordance. When provided AND the row is
+   * a post-group (carries a postId), a small bell-off icon-button renders
+   * that calls this with the postId (network is the consumer's concern —
+   * the package only fires the callback). Absent ⇒ no button (backward
+   * compatible; existing consumers keep today's behavior untouched).
+   */
+  onMuteThread?: (postId: string) => void;
+}
+
+/** Unread if the record's status says so, else fall back to readAt absence. */
+function isRecordUnread(n: Notification): boolean {
+  if (n.status) return n.status === "UNREAD";
+  return !n.readAt;
 }
 
 /**
@@ -29,11 +43,21 @@ interface NotificationRowProps {
  * Keep the type coverage in sync with services/core/prisma/schema.prisma
  * `NotificationType` enum + packages/widgets vanilla-JS formatter.
  */
-export function NotificationRow({ item, adapter, renderAvatar, now }: NotificationRowProps) {
+export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread }: NotificationRowProps) {
+  const [expanded, setExpanded] = React.useState(false);
   const isGroup = "isGroup" in item && item.isGroup === true;
-  const n = isGroup ? (item as NotificationGroup).notifications[0] : (item as Notification);
+  const group = isGroup ? (item as NotificationGroup) : null;
+  const n = group ? group.notifications[0] : (item as Notification);
   const payload = (n.payload || {}) as Record<string, unknown>;
-  const groupActors = isGroup ? (item as NotificationGroup).actors : null;
+  const groupActors = group ? group.actors : null;
+
+  // Unread from the record's status (group = unread if ANY child is).
+  const isUnread = group ? group.notifications.some(isRecordUnread) : isRecordUnread(n);
+
+  // A MIXED group (reactions + comments + …) summarizes by kind counts;
+  // a single-kind group keeps the existing "<names> reacted …" phrasing.
+  const kindCounts = group?.kindCounts ?? [];
+  const isMixedGroup = kindCounts.length > 1;
 
   // ─── Actor resolution ───────────────────────────────────────────
   // Each notification type stores actor fields under different keys.
@@ -169,45 +193,133 @@ export function NotificationRow({ item, adapter, renderAvatar, now }: Notificati
   };
 
   // ─── Build the message JSX ──────────────────────────────────────
-  const { messageNode, snippet, overlay, overlayTone, iconOnly, isClickable } = buildMessage({
-    type: n.type,
-    actor,
-    actorImage: actor.imageUrl,
-    community,
-    payload,
-    groupActors,
-  });
+  // Mixed groups get a count summary ("12 reactions and 3 comments on
+  // your post"); everything else goes through the per-type builder.
+  const built: BuiltMessage = isMixedGroup
+    ? {
+        messageNode: (
+          <>
+            <span className="font-medium">{formatGroupSummary(kindCounts)}</span>
+            <span style={{ opacity: 0.6 }}> on your post</span>
+          </>
+        ),
+        isClickable: true,
+      }
+    : buildMessage({
+        type: n.type,
+        actor,
+        actorImage: actor.imageUrl,
+        community,
+        payload,
+        groupActors,
+      });
+  const { messageNode, snippet, overlay, overlayTone, iconOnly, isClickable } = built;
 
   // ─── Friend-request rows get inline accept/reject actions ───────
   const isFriendRequestInbound = n.type === "FRIEND_REQUEST_INBOUND";
 
+  // ─── Mute affordance (UI + callback only, no network) ───────────
+  const showMute = !!group && !!postId && !!onMuteThread;
+  const muteButton = showMute ? (
+    <button
+      type="button"
+      aria-label="Mute this thread"
+      onClick={(e) => {
+        e.stopPropagation();
+        onMuteThread!(postId!);
+      }}
+      className="shrink-0 rounded-full p-1 cursor-pointer"
+      style={{ color: "var(--text-color, currentColor)", opacity: 0.4, background: "transparent" }}
+    >
+      <BellOffIcon />
+    </button>
+  ) : null;
+
+  const trailing = muteButton || isUnread ? (
+    <div className="flex items-center gap-2 shrink-0">
+      {muteButton}
+      {isUnread && (
+        <span
+          role="img"
+          aria-label="Unread"
+          className="rounded-full shrink-0"
+          style={{ width: 8, height: 8, background: "rgba(128,128,128,0.9)" }}
+        />
+      )}
+    </div>
+  ) : null;
+
+  // ─── Expandable sub-rows ("Show all") ───────────────────────────
+  const canExpand = !!group && group.notifications.length > 1;
+
   return (
-    <Row
-      onClick={isClickable ? handleClick : undefined}
-      leadingIcon={
-        iconOnly ?? (
-          <NotificationAvatarBadge
-            actors={groupActors ? toActorViews(groupActors) : [actor]}
-            overlay={overlay}
-            overlayClassName={overlayTone ? overlayToneClass(overlayTone) : ""}
-            renderAvatar={renderAvatar}
-          />
-        )
-      }
-      message={messageNode}
-      snippet={snippet}
-      createdAt={n.createdAt}
-      now={now}
-      footer={
-        isFriendRequestInbound ? (
-          <FriendRequestActions
-            notification={n}
-            onAccept={adapter.onAcceptFriendRequest}
-            onReject={adapter.onRejectFriendRequest}
-          />
-        ) : null
-      }
-    />
+    <div>
+      <Row
+        onClick={isClickable ? handleClick : undefined}
+        leadingIcon={
+          iconOnly ?? (
+            <NotificationAvatarBadge
+              actors={groupActors ? toActorViews(groupActors) : [actor]}
+              overlay={overlay}
+              overlayClassName={overlayTone ? overlayToneClass(overlayTone) : ""}
+              renderAvatar={renderAvatar}
+            />
+          )
+        }
+        message={messageNode}
+        snippet={snippet}
+        createdAt={n.createdAt}
+        now={now}
+        isUnread={isUnread}
+        trailing={trailing}
+        footer={
+          isFriendRequestInbound ? (
+            <FriendRequestActions
+              notification={n}
+              onAccept={adapter.onAcceptFriendRequest}
+              onReject={adapter.onRejectFriendRequest}
+            />
+          ) : null
+        }
+      />
+      {canExpand && (
+        <div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded((v) => !v);
+            }}
+            className="text-xs font-medium py-1 cursor-pointer"
+            style={{
+              paddingLeft: "3.25rem",
+              paddingRight: "1rem",
+              color: "var(--text-color, currentColor)",
+              opacity: 0.6,
+              background: "transparent",
+            }}
+          >
+            {expanded ? "Hide" : `Show all ${group!.notifications.length}`}
+          </button>
+          {expanded && (
+            <div
+              className="mt-1"
+              style={{ marginLeft: "1.25rem", borderLeft: "2px solid rgba(128,128,128,0.15)" }}
+            >
+              {group!.notifications.map((sub) => (
+                <NotificationRow
+                  key={sub.id}
+                  item={sub}
+                  adapter={adapter}
+                  renderAvatar={renderAvatar}
+                  now={now}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -221,6 +333,8 @@ function Row({
   createdAt,
   now,
   footer,
+  trailing,
+  isUnread,
 }: {
   onClick?: () => void;
   leadingIcon: ReactNode;
@@ -229,6 +343,8 @@ function Row({
   createdAt: string;
   now?: Date;
   footer?: ReactNode;
+  trailing?: ReactNode;
+  isUnread?: boolean;
 }) {
   const interactive = !!onClick;
   return (
@@ -238,12 +354,14 @@ function Row({
       onClick={onClick}
       onKeyDown={interactive ? (e) => (e.key === "Enter" || e.key === " ") && onClick?.() : undefined}
       className={`block px-4 py-2.5 transition-colors ${interactive ? "cursor-pointer" : ""}`}
-      style={{ background: "transparent" }}
+      // Unread treatment is NEUTRAL (no brand color): a subtle grey fill
+      // + bolder text + a grey dot, so it also reads on mobile.
+      style={{ background: isUnread ? "rgba(128,128,128,0.06)" : "transparent" }}
     >
       <div className="flex items-center gap-3">
         {leadingIcon}
         <div className="flex-1 min-w-0">
-          <p className="text-sm leading-snug line-clamp-2">{message}</p>
+          <p className={`text-sm leading-snug line-clamp-2 ${isUnread ? "font-semibold" : ""}`}>{message}</p>
           {snippet && (
             <p className="text-xs mt-0.5 line-clamp-1" style={{ opacity: 0.55 }}>
               &ldquo;{snippet}&rdquo;
@@ -253,6 +371,7 @@ function Row({
             {formatTimeAgo(createdAt, now)}
           </p>
         </div>
+        {trailing}
       </div>
       {footer}
     </div>
@@ -684,11 +803,13 @@ function shouldRouteToProfile(type: string): boolean {
   );
 }
 
-function toActorViews(actors: { name: string; usertag?: string; isVerified?: boolean }[]): NotificationActorView[] {
+function toActorViews(
+  actors: { name: string; usertag?: string; isVerified?: boolean; imageUrl?: string | null }[],
+): NotificationActorView[] {
   return actors.map((a) => ({
     name: a.name,
     usertag: a.usertag ?? null,
-    imageUrl: null,
+    imageUrl: a.imageUrl ?? null,
     isVerified: a.isVerified ?? null,
   }));
 }
@@ -738,23 +859,13 @@ function Glyph({ type }: { type: "heart" | "check" | "people" }) {
 
 function SolidIcon({
   type,
-  tone,
 }: {
   type: "shield" | "star" | "package" | "ban" | "arrow-left" | "coin" | "x" | "check";
-  tone: "red" | "green" | "yellow" | "blue";
+  // `tone` is still accepted from call sites for readability but is no
+  // longer used for color — system icons are NEUTRAL (muted grey), not
+  // brand/semantic-tinted, per the PR-2 redesign.
+  tone?: "red" | "green" | "yellow" | "blue";
 }) {
-  const toneToBg: Record<typeof tone, string> = {
-    red: "rgba(239,68,68,0.15)",
-    green: "rgba(34,197,94,0.15)",
-    yellow: "rgba(234,179,8,0.15)",
-    blue: "rgba(59,130,246,0.15)",
-  };
-  const toneToFg: Record<typeof tone, string> = {
-    red: "#ef4444",
-    green: "#22c55e",
-    yellow: "#eab308",
-    blue: "#3b82f6",
-  };
   const path = (() => {
     switch (type) {
       case "shield":
@@ -764,11 +875,11 @@ function SolidIcon({
       case "package":
         return <path d="M3 7l9-4 9 4-9 4-9-4zm0 5l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
       case "ban":
-        return <><circle cx="12" cy="12" r="10" /><path d="M5 5l14 14" stroke="white" strokeWidth="2" /></>;
+        return <><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M5 5l14 14" stroke="currentColor" strokeWidth="2" /></>;
       case "arrow-left":
         return <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
       case "coin":
-        return <><circle cx="12" cy="12" r="10" /><path d="M8 12h8M12 8v8" stroke="white" strokeWidth="2" /></>;
+        return <><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="2" /></>;
       case "x":
         return <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
       case "check":
@@ -779,11 +890,39 @@ function SolidIcon({
   return (
     <div
       className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-      style={{ background: toneToBg[tone], color: toneToFg[tone] }}
+      style={{ background: "rgba(128,128,128,0.10)" }}
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        style={{ color: "var(--text-color, currentColor)", opacity: 0.6 }}
+      >
         {path}
       </svg>
     </div>
+  );
+}
+
+/** Inline bell-off glyph for the mute affordance (no lucide runtime dep). */
+function BellOffIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      <path d="M18.63 13A17.9 17.9 0 0 1 18 8" />
+      <path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14" />
+      <path d="M18 8a6 6 0 0 0-9.33-5" />
+      <path d="M1 1l22 22" />
+    </svg>
   );
 }

@@ -32,8 +32,12 @@ export { cleanMentionMarkup } from "./utils/cleanMentionMarkup";
 export {
   groupNotifications,
   formatActorNames,
+  formatGroupSummary,
   type DisplayItem,
   type NotificationGroup,
+  type GroupActor,
+  type KindCount,
+  type PostActivityKind,
 } from "./utils/groupNotifications";
 
 // ─── Components (PR 3) ────────────────────────────────────────────
