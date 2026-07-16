@@ -185,3 +185,94 @@ describe("NotificationsView", () => {
     expect(onMuteThread).toHaveBeenCalledWith("p7");
   });
 });
+
+// `a` comes before `b` in document order?
+function isBefore(a: Element, b: Element): boolean {
+  return !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
+describe("NotificationsView — flat layout", () => {
+  it("renders 'New' and 'Earlier' section headers (and no time-based headers)", () => {
+    const items: Notification[] = [
+      makeNotif({ id: "u1", type: "POST_REACTED", status: "UNREAD", createdAt: "2026-06-05T14:00:00.000Z", payload: { postId: "p1", reactorName: "Ana" } }),
+      makeNotif({ id: "r1", type: "POST_COMMENTED", status: "READ", createdAt: "2026-05-20T14:00:00.000Z", payload: { postId: "p2", commenterName: "Becky" } }),
+    ];
+
+    render(
+      <NotificationsView
+        data={{ notifications: items, isLoading: false, markAsRead: () => {}, refresh: () => {} }}
+        layout="flat"
+        now={now}
+      />,
+    );
+
+    expect(screen.getByText("New")).toBeInTheDocument();
+    expect(screen.getByText("Earlier")).toBeInTheDocument();
+    // No time-based section headers in flat mode.
+    expect(screen.queryByText("Today")).not.toBeInTheDocument();
+    expect(screen.queryByText("This Month")).not.toBeInTheDocument();
+  });
+
+  it("puts unread items under New and read items under Earlier", () => {
+    const items: Notification[] = [
+      makeNotif({ id: "u1", type: "POST_REACTED", status: "UNREAD", createdAt: "2026-06-05T14:00:00.000Z", payload: { postId: "p1", reactorName: "Unreadia" } }),
+      makeNotif({ id: "r1", type: "POST_COMMENTED", status: "READ", createdAt: "2026-05-20T14:00:00.000Z", payload: { postId: "p2", commenterName: "Readerson" } }),
+    ];
+
+    render(
+      <NotificationsView
+        data={{ notifications: items, isLoading: false, markAsRead: () => {}, refresh: () => {} }}
+        layout="flat"
+        now={now}
+      />,
+    );
+
+    const newHeader = screen.getByText("New");
+    const earlierHeader = screen.getByText("Earlier");
+    const unreadRow = screen.getByText("Unreadia");
+    const readRow = screen.getByText("Readerson");
+
+    // Order down the list: New → unread row → Earlier → read row.
+    expect(isBefore(newHeader, unreadRow)).toBe(true);
+    expect(isBefore(unreadRow, earlierHeader)).toBe(true);
+    expect(isBefore(earlierHeader, readRow)).toBe(true);
+  });
+
+  it("pins an unread FRIEND_REQUEST_INBOUND to the top of New even when a newer unread reaction exists", () => {
+    // Reaction is NEWER than the request, but the request must still sort first.
+    const items: Notification[] = [
+      makeNotif({ id: "react", type: "POST_REACTED", status: "UNREAD", createdAt: "2026-06-05T14:00:00.000Z", payload: { postId: "p1", reactorName: "Reactor" } }),
+      makeNotif({ id: "req", type: "FRIEND_REQUEST_INBOUND", status: "UNREAD", createdAt: "2026-06-05T10:00:00.000Z", payload: { fromUser: { name: "Requester", usertag: "requester" } } }),
+    ];
+
+    render(
+      <NotificationsView
+        data={{ notifications: items, isLoading: false, markAsRead: () => {}, refresh: () => {} }}
+        layout="flat"
+        now={now}
+      />,
+    );
+
+    const newHeader = screen.getByText("New");
+    const requestRow = screen.getByText("Requester");
+    const reactionRow = screen.getByText("Reactor");
+
+    // Everything is unread ⇒ no Earlier section.
+    expect(screen.queryByText("Earlier")).not.toBeInTheDocument();
+    // Request pinned to the top of New, ahead of the newer reaction.
+    expect(isBefore(newHeader, requestRow)).toBe(true);
+    expect(isBefore(requestRow, reactionRow)).toBe(true);
+  });
+
+  it("shows the 'all caught up' empty state when there are no items", () => {
+    render(
+      <NotificationsView
+        data={{ notifications: [], isLoading: false, markAsRead: () => {}, refresh: () => {} }}
+        layout="flat"
+        now={now}
+      />,
+    );
+    expect(screen.getByText("You're all caught up")).toBeInTheDocument();
+    expect(screen.getByText("Nothing needs you right now.")).toBeInTheDocument();
+  });
+});
