@@ -67,6 +67,22 @@ export interface NotificationsAdapter {
   onPostClick?: (communityTag: string | undefined, postId: string) => void;
   onCommunityClick?: (communityTag: string) => void;
   onMembersListClick?: (communityTag: string) => void;
+  /**
+   * Navigate to an arbitrary link carried by a notification's payload —
+   * currently only APP_NOTIFICATION, where an installed app supplies its own
+   * destination rather than pointing at a platform entity.
+   *
+   * Optional: when a consumer does not wire it, the row falls back to a plain
+   * `window.location` assignment, which is correct for a site-relative path and
+   * for an off-site link alike. Wire it in a Next.js consumer to keep an
+   * in-app link a client-side transition.
+   *
+   * The URL is re-validated before either path runs — see `safeNotificationUrl`.
+   * The backend already rejects anything that is not http/https/site-relative,
+   * but payloads are free-form JSON in the DB and this package cannot assume
+   * every row came through that endpoint.
+   */
+  onUrlClick?: (url: string) => void;
   onClose?: () => void;
   onAcceptFriendRequest?: (notification: Notification) => Promise<void>;
   onRejectFriendRequest?: (notification: Notification) => Promise<void>;

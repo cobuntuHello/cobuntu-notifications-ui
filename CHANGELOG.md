@@ -4,6 +4,18 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.3.0 — 2026-08-07
+
+App platform P2.6: installed apps can now send a member a bell notification, so the row renderer has to handle copy it did not author.
+
+### Added
+- `NotificationRow` case for `APP_NOTIFICATION`. The app supplies `title`, `body`, `url`, and `appName` in the payload; the row renders the app's own words and attributes them, instead of falling through to the generic "New activity" row.
+- `NotificationsAdapter.onUrlClick?: (url: string) => void` — navigation for a payload-supplied destination. Optional; without it the row falls back to `window.location.assign`, so existing consumers need no change. Wire it in a Next.js consumer to keep an in-app link a client-side transition.
+- `safeNotificationUrl(raw: unknown): string | null` — exported so consumers (notably the vanilla widget twin) validate identically.
+
+### Security
+- `APP_NOTIFICATION` payloads are the first notification content authored by a third party, so the link is treated as untrusted. Only `https:`, `http:`, and single-slash site-relative paths navigate; `javascript:`, `data:`, and protocol-relative `//host` are refused. The backend write endpoint rejects the same set, making this the second of two gates rather than the only one — notification payloads are free-form JSON in the database and this package cannot verify which writer produced a given row.
+- An app notification never falls through to profile / community routing, so a payload cannot smuggle a `communityTag` or actor usertag to steer the click somewhere the app was not given a link to.
 ## 1.2.0 — 2026-07-16
 
 Notifications redesign, PR-3. Backward-compatible: all existing exports and props preserved; the new prop is optional and defaults to today's behavior.
@@ -24,6 +36,7 @@ Notifications redesign, PR-2 (row-level). Backward-compatible: all existing expo
 - **Weight-based unread.** Unread rows get a neutral grey fill + bolder weight + a neutral unread dot (works on mobile, which had no unread state before). No brand color.
 - **Neutral system icons.** Listing / membership / moderation icons render on a neutral grey circle instead of brand/semantic tint. Social avatar overlays unchanged.
 - **Mute affordance.** Optional `onMuteThread?: (postId: string) => void` on `NotificationsView` and `NotificationRow`. When provided, grouped post rows show an unobtrusive bell-off button that calls it with the postId (UI + callback only, no network). Absent ⇒ no button (unchanged).
+
 
 ## 1.0.0 — 2026-06-05
 

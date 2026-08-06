@@ -174,6 +174,19 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
   // ─── Routing target ─────────────────────────────────────────────
   const postId = (payload.postId as string) || (payload.messageId as string) || null;
   const handleClick = () => {
+    // An app-supplied destination wins over the platform routing below: the
+    // row has no post, profile, or community to fall back to, and the app is
+    // the only thing that knows where its notification points.
+    if (n.type === "APP_NOTIFICATION") {
+      const target = safeNotificationUrl(payload.url);
+      if (!target) return;
+      if (adapter.onUrlClick) {
+        adapter.onUrlClick(target);
+      } else if (typeof window !== "undefined") {
+        window.location.assign(target);
+      }
+      return;
+    }
     if (postId && community.communityTag && adapter.onPostClick) {
       adapter.onPostClick(community.communityTag, postId);
       return;
@@ -779,6 +792,31 @@ function buildMessage({
         isClickable: false,
       };
 
+    case "APP_NOTIFICATION": {
+      // The only type whose copy the platform did not author. An installed app
+      // supplies title + body, so there is nothing to look up and nothing to
+      // phrase — the row's job is to render the app's words and say who sent
+      // them, so a member is never left guessing what is talking to them.
+      const title = (payload.title as string) || "";
+      const appName = (payload.appName as string) || "";
+      const bodyText = maybe(payload.body);
+      return {
+        messageNode: (
+          <>
+            {bold(title)}
+            {appName ? muted(` · ${appName}`) : null}
+          </>
+        ),
+        snippet: bodyText,
+        // A box, not a checkmark: this is "an app is telling you something",
+        // not "something completed".
+        iconOnly: <SolidIcon type="package" tone="blue" />,
+        // Only clickable when the app actually gave us somewhere to go, and
+        // only when that somewhere survives validation.
+        isClickable: safeNotificationUrl(payload.url) !== null,
+      };
+    }
+
     default:
       // Unknown type — render a generic activity row rather than dropping
       // the record silently. Mirrors the legacy renderer's fall-through.
@@ -791,6 +829,39 @@ function buildMessage({
         ),
         isClickable: false,
       };
+  }
+}
+
+/**
+ * Return a notification payload's link only if it is safe to navigate to.
+ *
+ * `APP_NOTIFICATION` payloads carry a destination chosen by a third party, and
+ * this row turns it into a click. A `javascript:` or `data:` URL here would be
+ * script execution inside the community's own UI, wearing its branding.
+ *
+ * The write endpoint (POST /api/v1/communities/:tag/notifications) already
+ * rejects those, so this is the second of two gates rather than the only one.
+ * It exists because notification payloads are free-form JSON in the database:
+ * this package cannot verify that a given row was written by that endpoint, and
+ * a renderer that trusts its input is one bad writer away from being an XSS
+ * sink. Accepts https, http, and single-slash site-relative paths; `//host` is
+ * refused because it reads like a path and navigates off-origin.
+ */
+export function safeNotificationUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const url = raw.trim();
+  if (!url) return null;
+
+  if (url.startsWith("/")) {
+    return url.startsWith("//") ? null : url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    return parsed.toString();
+  } catch {
+    return null;
   }
 }
 
