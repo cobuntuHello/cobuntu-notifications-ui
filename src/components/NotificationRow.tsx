@@ -709,6 +709,59 @@ function buildMessage({
      * person. The buyer's name belongs in the sentence, not in the tile.
      */
 
+    /* ── Reviews and downloads (notifications v2, PR5) ───────────────────
+     *
+     * Both seller-facing. Both are rows the seller could not previously have
+     * seen at all: reviews notified nobody, and a buyer locked out of a file
+     * they had paid for was invisible to the only person who could help.
+     */
+
+    case "REVIEW_RECEIVED": {
+      const productName = (payload.productName as string) || "your product";
+      const reviewerName = (payload.reviewerName as string) || "Someone";
+      const rating = typeof payload.rating === "number" ? payload.rating : null;
+      const snippet = (payload.snippet as string) || undefined;
+      return {
+        messageNode: (
+          <>
+            {bold(reviewerName)}
+            {muted(" reviewed ")}
+            {bold(productName)}
+            {/* The star count is the first thing a seller wants, and it is the
+                difference between a row worth opening now and one that can
+                wait. Rendered as "4/5" rather than glyphs: a row of stars at
+                this size reads as decoration, and the number does not depend
+                on colour to be legible. */}
+            {rating !== null ? muted(`, ${rating}/5`) : null}
+          </>
+        ),
+        snippet,
+        iconOnly: <SolidIcon type="star" tone="yellow" />,
+        isClickable: false,
+      };
+    }
+
+    case "DOWNLOAD_LIMIT_REACHED": {
+      const productName = (payload.productName as string) || "your product";
+      const fileName = (payload.fileName as string) || "a file";
+      const buyerName = (payload.buyerName as string) || "A buyer";
+      return {
+        messageNode: (
+          <>
+            {bold(buyerName)}
+            {muted(" used up their downloads of ")}
+            {bold(fileName)}
+            {muted(` on ${productName}`)}
+          </>
+        ),
+        /* Says what to DO, because the row exists for the seller's decision
+           and the platform has already told the buyer to ask them. */
+        snippet: "They cannot download it again until you raise the limit.",
+        iconOnly: <SolidIcon type="ban" tone="yellow" />,
+        isClickable: false,
+      };
+    }
+
     case "SALE_COMPLETED": {
       const productName = (payload.productName as string) || "your product";
       const buyerName = (payload.buyerName as string) || "Someone";
