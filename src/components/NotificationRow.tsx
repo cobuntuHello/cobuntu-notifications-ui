@@ -709,6 +709,49 @@ function buildMessage({
      * person. The buyer's name belongs in the sentence, not in the tile.
      */
 
+    /* ── Courses (notifications v2, PR6) ─────────────────────────────────
+     *
+     * The courses module emitted nothing before this, so a learner on a drip
+     * course found out a lesson existed by opening it and looking.
+     */
+
+    case "COURSE_LESSON_PUBLISHED": {
+      const productName = (payload.productName as string) || "a course you own";
+      const lessonTitle = (payload.lessonTitle as string) || "A new lesson";
+      return {
+        messageNode: (
+          <>
+            {bold(lessonTitle)}
+            {muted(" was added to ")}
+            {bold(productName)}
+          </>
+        ),
+        /* Lesson first, course second: a learner on several courses is
+           scanning for whether THIS is something they want to open now, and
+           the lesson title is what answers that. */
+        iconOnly: <SolidIcon type="package" tone="blue" />,
+        isClickable: false,
+      };
+    }
+
+    case "COURSE_COMPLETED": {
+      const productName = (payload.productName as string) || "your course";
+      return {
+        messageNode: (
+          <>
+            {muted("You finished ")}
+            {bold(productName)}
+          </>
+        ),
+        /* No exclamation mark and no "congratulations". The row is a record
+           of something they did, and the house copy rules keep celebration
+           out of a notification list that also carries refunds and failed
+           payouts. */
+        iconOnly: <SolidIcon type="check" tone="green" />,
+        isClickable: false,
+      };
+    }
+
     /* ── Reviews and downloads (notifications v2, PR5) ───────────────────
      *
      * Both seller-facing. Both are rows the seller could not previously have
