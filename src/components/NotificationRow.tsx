@@ -692,6 +692,129 @@ function buildMessage({
       };
     }
 
+    /* ── Commerce (notifications v2, PR3) ────────────────────────────────
+     *
+     * The bell's first money rows. Until these, a seller making a sale got an
+     * email and nothing here, because there was no NotificationType to write.
+     *
+     * Every amount in these payloads arrives ALREADY FORMATTED by the sender
+     * (`fmt()` / `formatPriceFromSmallestUnit`), currency symbol included.
+     * This package must not reformat or do arithmetic on them: money on the
+     * platform is stored in the smallest unit, and a row that divided by 100 a
+     * second time would quietly show a hundredth of the real figure. Print
+     * what you are given, and fall back to naming the thing rather than
+     * printing a wrong number.
+     *
+     * `iconOnly` rather than an avatar: the actor is the platform, not a
+     * person. The buyer's name belongs in the sentence, not in the tile.
+     */
+
+    case "SALE_COMPLETED": {
+      const productName = (payload.productName as string) || "your product";
+      const buyerName = (payload.buyerName as string) || "Someone";
+      const saleAmount = payload.saleAmount as string | undefined;
+      return {
+        messageNode: (
+          <>
+            {bold(buyerName)}
+            {muted(" bought ")}
+            {bold(productName)}
+            {saleAmount ? muted(` for ${saleAmount}`) : null}
+          </>
+        ),
+        iconOnly: <SolidIcon type="coin" tone="green" />,
+        isClickable: false,
+      };
+    }
+
+    case "PURCHASE_COMPLETED": {
+      const productName = (payload.productName as string) || "your purchase";
+      return {
+        messageNode: (
+          <>
+            {muted("You bought ")}
+            {bold(productName)}
+            {muted(community.name ? ` in ${community.name}` : "")}
+          </>
+        ),
+        iconOnly: <SolidIcon type="package" tone="green" />,
+        isClickable: false,
+      };
+    }
+
+    case "REFUND_COMPLETED": {
+      const productName = (payload.productName as string) || "your purchase";
+      const refundAmount = payload.refundAmount as string | undefined;
+      return {
+        messageNode: (
+          <>
+            {muted("Your refund for ")}
+            {bold(productName)}
+            {/* "has been issued", not "is in your account": the money has left
+                us, but when it lands is the card issuer's business, and
+                promising arrival here is how support tickets are made. */}
+            {muted(refundAmount ? ` has been issued, ${refundAmount}` : " has been issued")}
+          </>
+        ),
+        iconOnly: <SolidIcon type="arrow-left" tone="blue" />,
+        isClickable: false,
+      };
+    }
+
+    case "SALE_REFUNDED": {
+      const productName = (payload.productName as string) || "a sale";
+      const buyerName = (payload.buyerName as string) || "A buyer";
+      const refundAmount = payload.refundAmount as string | undefined;
+      return {
+        messageNode: (
+          <>
+            {bold(buyerName)}
+            {muted(" was refunded for ")}
+            {bold(productName)}
+            {refundAmount ? muted(`, ${refundAmount}`) : null}
+          </>
+        ),
+        iconOnly: <SolidIcon type="arrow-left" tone="yellow" />,
+        isClickable: false,
+      };
+    }
+
+    case "PAYOUT_CONFIRMED": {
+      const payoutAmount = payload.payoutAmount as string | undefined;
+      return {
+        messageNode: (
+          <>
+            {muted("Your payout of ")}
+            {bold(payoutAmount || "your earnings")}
+            {muted(" is on its way to your bank")}
+          </>
+        ),
+        iconOnly: <SolidIcon type="coin" tone="green" />,
+        isClickable: false,
+      };
+    }
+
+    case "PAYOUT_FAILED": {
+      const payoutAmount = payload.payoutAmount as string | undefined;
+      const reason = payload.failureReason as string | undefined;
+      return {
+        messageNode: (
+          <>
+            {muted("Your payout")}
+            {payoutAmount ? muted(` of ${payoutAmount}`) : null}
+            {muted(" could not be sent. ")}
+            {bold("Check your payment details")}
+          </>
+        ),
+        /* The reason is the actionable part and is often the only thing that
+           tells a seller what to change, so it goes in the snippet rather than
+           being dropped. */
+        snippet: reason,
+        iconOnly: <SolidIcon type="x" tone="red" />,
+        isClickable: false,
+      };
+    }
+
     case "LISTING_APPROVED": {
       const itemName = (payload.itemName as string) || "your listing";
       const itemType = (payload.itemType as string) || "listing";

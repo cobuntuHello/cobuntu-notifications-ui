@@ -39,6 +39,129 @@ function clickRow(container: HTMLElement): boolean {
   return target !== null;
 }
 
+/**
+ * Commerce rows (notifications v2, PR3).
+ *
+ * These are the bell's first money rows. The trap they share is not layout, it
+ * is arithmetic: every amount arrives ALREADY FORMATTED by the backend, with a
+ * currency symbol, because money on the platform is stored in the smallest
+ * unit and the sender has already converted. A row that "helpfully" divided by
+ * 100 again would show a hundredth of the real figure, and would look
+ * plausible enough to ship.
+ */
+describe("NotificationRow — commerce", () => {
+  it("renders SALE_COMPLETED naming the buyer, the product and the amount", () => {
+    const item = makeNotif({
+      type: "SALE_COMPLETED",
+      payload: { buyerName: "Alice Rivera", productName: "Seller Tracking Guide", saleAmount: "€25.00" },
+    });
+    render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(screen.getByText("Alice Rivera")).toBeInTheDocument();
+    expect(screen.getByText("Seller Tracking Guide")).toBeInTheDocument();
+    expect(screen.getByText(/€25\.00/)).toBeInTheDocument();
+  });
+
+  it("prints the amount it was given, untouched", () => {
+    // The whole failure mode in one assertion: 2500 cents was formatted to
+    // "€25.00" by the sender. If this row ever shows €0.25, something started
+    // doing maths it should not.
+    const item = makeNotif({
+      type: "SALE_COMPLETED",
+      payload: { buyerName: "Alice", productName: "Guide", saleAmount: "€25.00" },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(container.textContent).toContain("€25.00");
+    expect(container.textContent).not.toContain("0.25");
+  });
+
+  it("still says something useful when the amount is missing", () => {
+    const item = makeNotif({
+      type: "SALE_COMPLETED",
+      payload: { buyerName: "Alice", productName: "Guide" },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(container.textContent).toContain("Alice");
+    expect(container.textContent).toContain("Guide");
+    expect(container.textContent).not.toMatch(/undefined|NaN/);
+  });
+
+  it("renders PURCHASE_COMPLETED from the buyer's side", () => {
+    const item = makeNotif({
+      type: "PURCHASE_COMPLETED",
+      payload: { productName: "Brunch ticket", community: { name: "PBN", communityTag: "pbn" } },
+    });
+    render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(screen.getByText("Brunch ticket")).toBeInTheDocument();
+    expect(screen.getByText(/You bought/i)).toBeInTheDocument();
+  });
+
+  it("says a refund was ISSUED, not that it has arrived", () => {
+    // The money has left us; when it lands is the card issuer's business.
+    // Promising arrival here is how support tickets get made.
+    const item = makeNotif({
+      type: "REFUND_COMPLETED",
+      payload: { productName: "Workshop", refundAmount: "€40.00" },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(container.textContent).toMatch(/issued/i);
+    expect(container.textContent).not.toMatch(/in your account|arrived|received/i);
+  });
+
+  it("keeps SALE_REFUNDED and REFUND_COMPLETED distinct", () => {
+    // Seller and buyer read different sentences about the same refund.
+    const seller = render(
+      <NotificationRow
+        item={makeNotif({ type: "SALE_REFUNDED", payload: { buyerName: "Bruno", productName: "Guide" } })}
+        adapter={{}}
+        now={now}
+      />,
+    );
+    expect(seller.container.textContent).toContain("Bruno");
+    expect(seller.container.textContent).toMatch(/was refunded/i);
+    seller.unmount();
+
+    const buyer = render(
+      <NotificationRow
+        item={makeNotif({ type: "REFUND_COMPLETED", payload: { productName: "Guide" } })}
+        adapter={{}}
+        now={now}
+      />,
+    );
+    expect(buyer.container.textContent).toMatch(/your refund/i);
+  });
+
+  it("renders PAYOUT_CONFIRMED with the amount", () => {
+    const item = makeNotif({ type: "PAYOUT_CONFIRMED", payload: { payoutAmount: "€120.50 EUR" } });
+    render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(screen.getByText("€120.50 EUR")).toBeInTheDocument();
+  });
+
+  it("carries the failure reason on PAYOUT_FAILED, because it is the actionable part", () => {
+    const item = makeNotif({
+      type: "PAYOUT_FAILED",
+      payload: { payoutAmount: "€120.50", failureReason: "Bank account closed" },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(container.textContent).toContain("Bank account closed");
+    expect(container.textContent).toMatch(/could not be sent/i);
+  });
+
+  it("never falls back to the generic row for a commerce type", () => {
+    // The fallback is what the coverage test in the consuming app forbids;
+    // assert it here too, where the renderer actually lives.
+    for (const type of [
+      "SALE_COMPLETED", "PURCHASE_COMPLETED", "REFUND_COMPLETED",
+      "SALE_REFUNDED", "PAYOUT_CONFIRMED", "PAYOUT_FAILED",
+    ]) {
+      const { container, unmount } = render(
+        <NotificationRow item={makeNotif({ type, payload: {} })} adapter={{}} now={now} />,
+      );
+      expect(container.textContent, type).not.toMatch(/New activity from/i);
+      unmount();
+    }
+  });
+});
+
 describe("NotificationRow", () => {
   it("renders FRIEND_REQUEST_INBOUND with the actor's real name (not 'Someone')", () => {
     const item = makeNotif({
