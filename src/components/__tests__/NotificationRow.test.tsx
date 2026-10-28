@@ -49,6 +49,41 @@ function clickRow(container: HTMLElement): boolean {
  * 100 again would show a hundredth of the real figure, and would look
  * plausible enough to ship.
  */
+describe("NotificationRow — courses", () => {
+  it("leads a new-lesson row with the LESSON, then the course", () => {
+    // A learner on several courses is scanning for whether this is something
+    // to open now, and the lesson title is what answers that.
+    const item = makeNotif({
+      type: "COURSE_LESSON_PUBLISHED",
+      payload: { lessonTitle: "Pricing your first offer", productName: "Launch Kit" },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(screen.getByText("Pricing your first offer")).toBeInTheDocument();
+    expect(screen.getByText("Launch Kit")).toBeInTheDocument();
+    const text = container.textContent || "";
+    expect(text.indexOf("Pricing your first offer")).toBeLessThan(text.indexOf("Launch Kit"));
+  });
+
+  it("states a completion plainly, without celebration", () => {
+    // This list also carries refunds and failed payouts; an exclamation mark
+    // here would read badly two rows above one of those.
+    const item = makeNotif({ type: "COURSE_COMPLETED", payload: { productName: "Launch Kit" } });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(container.textContent).toMatch(/You finished/i);
+    expect(container.textContent).not.toMatch(/congratulations|!/i);
+  });
+
+  it("never falls back to the generic row", () => {
+    for (const type of ["COURSE_LESSON_PUBLISHED", "COURSE_COMPLETED"]) {
+      const { container, unmount } = render(
+        <NotificationRow item={makeNotif({ type, payload: {} })} adapter={{}} now={now} />,
+      );
+      expect(container.textContent, type).not.toMatch(/New activity from/i);
+      unmount();
+    }
+  });
+});
+
 describe("NotificationRow — reviews and downloads", () => {
   it("leads a review row with who and what, and carries the rating", () => {
     const item = makeNotif({
