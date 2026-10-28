@@ -49,6 +49,61 @@ function clickRow(container: HTMLElement): boolean {
  * 100 again would show a hundredth of the real figure, and would look
  * plausible enough to ship.
  */
+describe("NotificationRow — reviews and downloads", () => {
+  it("leads a review row with who and what, and carries the rating", () => {
+    const item = makeNotif({
+      type: "REVIEW_RECEIVED",
+      payload: { reviewerName: "Carla Mendes", productName: "Guide", rating: 4, snippet: "Really useful." },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(screen.getByText("Carla Mendes")).toBeInTheDocument();
+    expect(screen.getByText("Guide")).toBeInTheDocument();
+    expect(container.textContent).toContain("4/5");
+    expect(container.textContent).toContain("Really useful.");
+  });
+
+  it("omits the rating rather than inventing one when it is absent", () => {
+    const item = makeNotif({
+      type: "REVIEW_RECEIVED",
+      payload: { reviewerName: "Carla", productName: "Guide" },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(container.textContent).not.toMatch(/undefined|null|NaN|\/5/);
+  });
+
+  it("renders a 0/5 review, which is falsy and must not vanish", () => {
+    // The obvious `rating ? ... : null` would silently drop the worst review
+    // a seller can get — the one they most need to see.
+    const item = makeNotif({
+      type: "REVIEW_RECEIVED",
+      payload: { reviewerName: "Carla", productName: "Guide", rating: 0 },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(container.textContent).toContain("0/5");
+  });
+
+  it("tells the seller what a download lockout means for them", () => {
+    const item = makeNotif({
+      type: "DOWNLOAD_LIMIT_REACHED",
+      payload: { buyerName: "Bruno Costa", fileName: "guide.pdf", productName: "Guide" },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(screen.getByText("Bruno Costa")).toBeInTheDocument();
+    expect(screen.getByText("guide.pdf")).toBeInTheDocument();
+    expect(container.textContent).toMatch(/raise the limit/i);
+  });
+
+  it("never falls back to the generic row", () => {
+    for (const type of ["REVIEW_RECEIVED", "DOWNLOAD_LIMIT_REACHED"]) {
+      const { container, unmount } = render(
+        <NotificationRow item={makeNotif({ type, payload: {} })} adapter={{}} now={now} />,
+      );
+      expect(container.textContent, type).not.toMatch(/New activity from/i);
+      unmount();
+    }
+  });
+});
+
 describe("NotificationRow — commerce", () => {
   it("renders SALE_COMPLETED naming the buyer, the product and the amount", () => {
     const item = makeNotif({
