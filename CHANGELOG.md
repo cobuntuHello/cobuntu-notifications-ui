@@ -4,6 +4,18 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.10.0 — 2026-10-29
+
+### Added
+- **The three approval rows.** `APPROVAL_REQUESTED`, `APPROVAL_REQUEST_SENT` and `APPROVAL_DECIDED`. The decider's row is a job rather than news (nothing moves until they act, and at fourteen days the request cancels and charges them the processing fee), so it is toned yellow and its snippet says what is being waited on.
+- **The artifact thumbnail.** A 40px cover of the product, event or course a row is about, in the trailing slot. The leading tile answers "who"; this answers "which thing" — a member with four listings reading "your product X was approved" otherwise has to parse a name to work out which of their things moved. Squircle rather than circle, because a circle reads as a person and the round avatar on the left is already doing that job. Hides itself if the URL 404s.
+- **The person, in the six rows that name one.** `LISTING_REQUESTED`, `LISTING_WITHDRAWN`, `SALE_COMPLETED`, `SALE_REFUNDED`, `REVIEW_RECEIVED`, `DOWNLOAD_LIMIT_REACHED` and `APPROVAL_REQUESTED` drew an anonymous grey tile beside a sentence naming somebody. They now use the avatar-plus-badge composite the reaction rows have always used.
+
+### Compatibility
+Both images are read from fields the backend resolves at READ time; a stored URL is wrong the moment somebody changes their photo or banner, and notifications sit in the bell for months. Every row written before that resolution renders exactly as it did: no avatar means the plain glyph tile, no cover means no trailing image and no reserved space.
+
+`APPROVAL_DECIDED` falls back to the pre-written title and body that the old `APP_NOTIFICATION` path sent, so decisions already in people's bells keep reading correctly.
+
 ## 1.9.0 — 2026-10-29
 
 Three things the rows were not saying, found in a design audit of the bell.
