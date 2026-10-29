@@ -50,5 +50,9 @@ export {
 } from "./components/NotificationAvatarBadge";
 export { SectionHeader } from "./components/SectionHeader";
 export { EmptyState } from "./components/EmptyState";
-export { NotificationRow, safeNotificationUrl } from "./components/NotificationRow";
+export {
+  NotificationRow,
+  safeNotificationUrl,
+  type NotificationLabels,
+} from "./components/NotificationRow";
 export { NotificationsView } from "./components/NotificationsView";
