@@ -25,6 +25,11 @@ interface NotificationRowProps {
    * compatible; existing consumers keep today's behavior untouched).
    */
   onMuteThread?: (postId: string) => void;
+  /**
+   * Translated message templates, keyed by notification type. Optional: with
+   * none, the rows read exactly as they do today. See NotificationLabels.
+   */
+  labels?: NotificationLabels;
 }
 
 /** Unread if the record's status says so, else fall back to readAt absence. */
@@ -43,7 +48,7 @@ function isRecordUnread(n: Notification): boolean {
  * Keep the type coverage in sync with services/core/prisma/schema.prisma
  * `NotificationType` enum + packages/widgets vanilla-JS formatter.
  */
-export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread }: NotificationRowProps) {
+export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread, labels }: NotificationRowProps) {
   const [expanded, setExpanded] = React.useState(false);
   const isGroup = "isGroup" in item && item.isGroup === true;
   const group = isGroup ? (item as NotificationGroup) : null;
@@ -225,6 +230,7 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
         community,
         payload,
         groupActors,
+        labels,
       });
   const { messageNode, snippet, overlay, overlayTone, iconOnly, isClickable } = built;
 
@@ -449,6 +455,84 @@ interface BuildMessageInput {
   community: { name?: string | null; communityTag?: string | null; iconUrl?: string | null };
   payload: Record<string, unknown>;
   groupActors: NotificationActorView[] | null;
+  labels?: NotificationLabels;
+}
+
+/**
+ * Message templates for the bell rows, keyed by notification type.
+ *
+ * ── Why this exists ─────────────────────────────────────────────────────────
+ *
+ * Every row in this file was hardcoded English. The community app ships in 24
+ * locales and its notification SETTINGS screen is fully translated, so a
+ * Portuguese member could read "A new lesson in a course you bought" in
+ * settings and then open the bell and be told "was added to" in English. The
+ * package was the one place in that loop with no way in for copy.
+ *
+ * A template is a sentence with {named} slots:
+ *
+ *   SALE_COMPLETED: "{buyer} bought {product}"
+ *
+ * Literal text renders muted, a slot renders emphasised, and a slot whose
+ * value is already a node (an actor name followed by a verified badge) renders
+ * as-is. That is the whole contract -- no ICU, no plurals -- because every
+ * string here is one short sentence with substitutions and anything richer
+ * belongs in the host app, not in a shared row renderer.
+ *
+ * Entirely optional. A consumer that passes nothing gets exactly the English
+ * it gets today, and a map missing a key falls back to that key's English, so
+ * a locale can be translated a row at a time rather than all at once.
+ *
+ * Keys carry a variant suffix where one sentence has two shapes -- a sale with
+ * a known amount and one without are different sentences, not one sentence
+ * with an empty slot, and translators need both.
+ *
+ * ── Still English, and known to be ──────────────────────────────────────────
+ *
+ * Two aggregate surfaces are NOT covered here, deliberately rather than by
+ * oversight:
+ *
+ *   - `formatGroupSummary` in utils/groupNotifications ("3 reactions and 2
+ *     comments on your post"), whose nouns live in a one/many table.
+ *   - `renderActorNames` in NotificationAvatarBadge (the " and " joiner, the
+ *     "N others" tail, and the "Someone" fallback).
+ *
+ * Both need real plural rules, and a one/many split is already wrong for any
+ * language with more than two forms. Wiring them through this template system
+ * would hardcode the English plural model into two more places and make the
+ * eventual correct fix harder. They want Intl.PluralRules and a list
+ * formatter, which is its own change.
+ */
+export type NotificationLabels = Record<string, string>;
+
+/**
+ * Render one template.
+ *
+ * Splits on the {slot} tokens and keeps the literal chunks muted, which is
+ * what preserves the existing look: before this, each case hand-assembled the
+ * same muted/bold alternation inline.
+ */
+function renderTemplate(
+  template: string,
+  values: Record<string, ReactNode>,
+  muted: (text: string) => ReactNode,
+  bold: (text: string) => ReactNode,
+): ReactNode {
+  const parts = template.split(/(\{[A-Za-z0-9_]+\})/g).filter((part) => part !== "");
+  return (
+    <>
+      {parts.map((part, i) => {
+        const slot = part.match(/^\{([A-Za-z0-9_]+)\}$/);
+        if (!slot) return <React.Fragment key={i}>{muted(part)}</React.Fragment>;
+        const value = values[slot[1]];
+        return (
+          <React.Fragment key={i}>
+            {typeof value === "string" ? bold(value) : (value ?? null)}
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
 }
 
 interface BuiltMessage {
@@ -468,58 +552,53 @@ function buildMessage({
   community,
   payload,
   groupActors,
+  labels,
 }: BuildMessageInput): BuiltMessage {
   const muted = (text: string) => <span style={{ opacity: 0.6 }}>{text}</span>;
   const bold = (text: string) => <span className="font-medium">{text}</span>;
 
+  /** A row's sentence: the host's template if it has one, else this file's. */
+  const line = (key: string, fallback: string, values: Record<string, ReactNode> = {}) =>
+    renderTemplate(labels?.[key] ?? fallback, values, muted, bold);
+
+  /** The actor's name plus their verified badge, as one substitutable slot. */
+  const actorSlot = (
+    <>
+      {bold(actor.name)}
+      {actor.isVerified ? <VerifiedBadge /> : null}
+    </>
+  );
+
   switch (type) {
     case "FRIEND_REQUEST_INBOUND":
       return {
-        messageNode: (
-          <>
-            {bold(actor.name)}
-            {actor.isVerified ? <VerifiedBadge /> : null}
-            {muted(" sent you a friend request")}
-          </>
-        ),
+        messageNode: line("FRIEND_REQUEST_INBOUND", "{actor} sent you a friend request", {
+          actor: actorSlot,
+        }),
         isClickable: true,
       };
 
     case "FRIEND_REQUEST_ACCEPTED":
       return {
-        messageNode: (
-          <>
-            {bold(actor.name)}
-            {actor.isVerified ? <VerifiedBadge /> : null}
-            {muted(" accepted your friend request")}
-          </>
-        ),
+        messageNode: line("FRIEND_REQUEST_ACCEPTED", "{actor} accepted your friend request", {
+          actor: actorSlot,
+        }),
         isClickable: true,
       };
 
     case "FRIENDSHIP_CONFIRMED":
       return {
-        messageNode: (
-          <>
-            {muted("You and ")}
-            {bold(actor.name)}
-            {actor.isVerified ? <VerifiedBadge /> : null}
-            {muted(" are now friends")}
-          </>
-        ),
+        messageNode: line("FRIENDSHIP_CONFIRMED", "You and {actor} are now friends", {
+          actor: actorSlot,
+        }),
         isClickable: true,
       };
 
     case "MEMBERSHIP_CONFIRMED":
       return {
         messageNode: community.name
-          ? (
-            <>
-              {muted("You joined ")}
-              {bold(community.name)}
-            </>
-          )
-          : <>{muted("Your membership was confirmed")}</>,
+          ? line("MEMBERSHIP_CONFIRMED", "You joined {community}", { community: community.name })
+          : line("MEMBERSHIP_CONFIRMED_noCommunity", "Your membership was confirmed"),
         overlay: <Glyph type="check" />,
         overlayTone: "green",
         isClickable: true,
@@ -527,20 +606,14 @@ function buildMessage({
 
     case "MEMBERSHIP_REQUEST":
       return {
-        messageNode: (
-          <>
-            {bold(actor.name)}
-            {actor.isVerified ? <VerifiedBadge /> : null}
-            {community.name ? (
-              <>
-                {muted(" requested to join ")}
-                {bold(community.name)}
-              </>
-            ) : (
-              muted(" requested to join")
-            )}
-          </>
-        ),
+        messageNode: community.name
+          ? line("MEMBERSHIP_REQUEST", "{actor} requested to join {community}", {
+              actor: actorSlot,
+              community: community.name,
+            })
+          : line("MEMBERSHIP_REQUEST_noCommunity", "{actor} requested to join", {
+              actor: actorSlot,
+            }),
         overlay: <Glyph type="people" />,
         overlayTone: "blue",
         isClickable: true,
@@ -548,27 +621,18 @@ function buildMessage({
 
     case "MEMBERSHIP_KICKED_USER":
       return {
-        messageNode: (
-          <>
-            {muted("You were removed from ")}
-            {bold(community.name || "the community")}
-          </>
-        ),
+        messageNode: line("MEMBERSHIP_KICKED_USER", "You were removed from {community}", {
+          community: community.name || "the community",
+        }),
         iconOnly: <SolidIcon type="shield" tone="red" />,
         isClickable: !!community.communityTag,
       };
 
     case "POST_REACTED":
       return {
-        messageNode: (
-          <>
-            {groupActors ? renderActorNames(groupActors) : <>
-              {bold(actor.name)}
-              {actor.isVerified ? <VerifiedBadge /> : null}
-            </>}
-            {muted(" reacted to your post")}
-          </>
-        ),
+        messageNode: line("POST_REACTED", "{actor} reacted to your post", {
+          actor: groupActors ? renderActorNames(groupActors) : actorSlot,
+        }),
         snippet: maybe(payload.postSnippet),
         overlay: <Glyph type="heart" />,
         overlayTone: "red",
@@ -577,45 +641,27 @@ function buildMessage({
 
     case "POST_COMMENTED":
       return {
-        messageNode: (
-          <>
-            {groupActors ? renderActorNames(groupActors) : <>
-              {bold(actor.name)}
-              {actor.isVerified ? <VerifiedBadge /> : null}
-            </>}
-            {muted(" commented on your post")}
-          </>
-        ),
+        messageNode: line("POST_COMMENTED", "{actor} commented on your post", {
+          actor: groupActors ? renderActorNames(groupActors) : actorSlot,
+        }),
         snippet: maybe(payload.commentSnippet),
         isClickable: true,
       };
 
     case "POST_COMMENT_REPLY":
       return {
-        messageNode: (
-          <>
-            {groupActors ? renderActorNames(groupActors) : <>
-              {bold(actor.name)}
-              {actor.isVerified ? <VerifiedBadge /> : null}
-            </>}
-            {muted(" replied to your comment")}
-          </>
-        ),
+        messageNode: line("POST_COMMENT_REPLY", "{actor} replied to your comment", {
+          actor: groupActors ? renderActorNames(groupActors) : actorSlot,
+        }),
         snippet: maybe(payload.replySnippet),
         isClickable: true,
       };
 
     case "POST_COMMENT_LIKED":
       return {
-        messageNode: (
-          <>
-            {groupActors ? renderActorNames(groupActors) : <>
-              {bold(actor.name)}
-              {actor.isVerified ? <VerifiedBadge /> : null}
-            </>}
-            {muted(" liked your comment")}
-          </>
-        ),
+        messageNode: line("POST_COMMENT_LIKED", "{actor} liked your comment", {
+          actor: groupActors ? renderActorNames(groupActors) : actorSlot,
+        }),
         snippet: maybe(payload.commentSnippet),
         overlay: <Glyph type="heart" />,
         overlayTone: "red",
@@ -624,26 +670,16 @@ function buildMessage({
 
     case "POST_MENTIONED":
       return {
-        messageNode: (
-          <>
-            {bold(actor.name)}
-            {actor.isVerified ? <VerifiedBadge /> : null}
-            {muted(" mentioned you in a post")}
-          </>
-        ),
+        messageNode: line("POST_MENTIONED", "{actor} mentioned you in a post", {
+          actor: actorSlot,
+        }),
         snippet: maybe(payload.postText),
         isClickable: true,
       };
 
     case "FEED_MENTIONED":
       return {
-        messageNode: (
-          <>
-            {bold(actor.name)}
-            {actor.isVerified ? <VerifiedBadge /> : null}
-            {muted(" mentioned you")}
-          </>
-        ),
+        messageNode: line("FEED_MENTIONED", "{actor} mentioned you", { actor: actorSlot }),
         snippet: maybe(payload.text),
         isClickable: true,
       };
@@ -651,12 +687,10 @@ function buildMessage({
     case "POST_STAR_ACHIEVED": {
       const lvl = (payload.starLevel as number | undefined) ?? 1;
       return {
-        messageNode: (
-          <>
-            {muted("Your post reached ")}
-            {bold(`${lvl} star${lvl === 1 ? "" : "s"}`)}
-            {muted("!")}
-          </>
+        messageNode: line(
+          lvl === 1 ? "POST_STAR_ACHIEVED_one" : "POST_STAR_ACHIEVED_other",
+          lvl === 1 ? "Your post reached {count} star!" : "Your post reached {count} stars!",
+          { count: String(lvl) },
         ),
         iconOnly: <SolidIcon type="star" tone="yellow" />,
         isClickable: true,
@@ -665,12 +699,9 @@ function buildMessage({
 
     case "POST_REMOVED_FROM_COMMUNITY":
       return {
-        messageNode: (
-          <>
-            {muted("Your post was removed from ")}
-            {bold(community.name || "the community")}
-          </>
-        ),
+        messageNode: line("POST_REMOVED_FROM_COMMUNITY", "Your post was removed from {community}", {
+          community: community.name || "the community",
+        }),
         iconOnly: <SolidIcon type="shield" tone="red" />,
         isClickable: false,
       };
@@ -680,13 +711,10 @@ function buildMessage({
       const requesterName = (payload.requesterName as string) || actor.name;
       const itemName = (payload.itemName as string) || "an item";
       return {
-        messageNode: (
-          <>
-            {bold(requesterName)}
-            {muted(" requested to list ")}
-            {bold(itemName)}
-          </>
-        ),
+        messageNode: line("LISTING_REQUESTED", "{requester} requested to list {item}", {
+          requester: requesterName,
+          item: itemName,
+        }),
         iconOnly: <SolidIcon type="package" tone="blue" />,
         isClickable: true,
       };
@@ -716,16 +744,13 @@ function buildMessage({
      */
 
     case "COURSE_LESSON_PUBLISHED": {
-      const productName = (payload.productName as string) || "a course you own";
+      const productName = (payload.productName as string) || "a course you bought";
       const lessonTitle = (payload.lessonTitle as string) || "A new lesson";
       return {
-        messageNode: (
-          <>
-            {bold(lessonTitle)}
-            {muted(" was added to ")}
-            {bold(productName)}
-          </>
-        ),
+        messageNode: line("COURSE_LESSON_PUBLISHED", "{lesson} was added to {course}", {
+          lesson: lessonTitle,
+          course: productName,
+        }),
         /* Lesson first, course second: a learner on several courses is
            scanning for whether THIS is something they want to open now, and
            the lesson title is what answers that. */
@@ -737,12 +762,7 @@ function buildMessage({
     case "COURSE_COMPLETED": {
       const productName = (payload.productName as string) || "your course";
       return {
-        messageNode: (
-          <>
-            {muted("You finished ")}
-            {bold(productName)}
-          </>
-        ),
+        messageNode: line("COURSE_COMPLETED", "You finished {course}", { course: productName }),
         /* No exclamation mark and no "congratulations". The row is a record
            of something they did, and the house copy rules keep celebration
            out of a notification list that also carries refunds and failed
@@ -765,19 +785,23 @@ function buildMessage({
       const rating = typeof payload.rating === "number" ? payload.rating : null;
       const snippet = (payload.snippet as string) || undefined;
       return {
-        messageNode: (
-          <>
-            {bold(reviewerName)}
-            {muted(" reviewed ")}
-            {bold(productName)}
-            {/* The star count is the first thing a seller wants, and it is the
-                difference between a row worth opening now and one that can
-                wait. Rendered as "4/5" rather than glyphs: a row of stars at
-                this size reads as decoration, and the number does not depend
-                on colour to be legible. */}
-            {rating !== null ? muted(`, ${rating}/5`) : null}
-          </>
-        ),
+        /* The star count is the first thing a seller wants, and it is the
+           difference between a row worth opening now and one that can wait.
+           Rendered as "4/5" rather than glyphs: a row of stars at this size
+           reads as decoration, and the number does not depend on colour to be
+           legible. Its own template, because where a rating sits in the
+           sentence is a language's business. */
+        messageNode:
+          rating !== null
+            ? line("REVIEW_RECEIVED_rated", "{reviewer} reviewed {product}, {rating}/5", {
+                reviewer: reviewerName,
+                product: productName,
+                rating: String(rating),
+              })
+            : line("REVIEW_RECEIVED", "{reviewer} reviewed {product}", {
+                reviewer: reviewerName,
+                product: productName,
+              }),
         snippet,
         iconOnly: <SolidIcon type="star" tone="yellow" />,
         isClickable: false,
@@ -789,17 +813,15 @@ function buildMessage({
       const fileName = (payload.fileName as string) || "a file";
       const buyerName = (payload.buyerName as string) || "A buyer";
       return {
-        messageNode: (
-          <>
-            {bold(buyerName)}
-            {muted(" used up their downloads of ")}
-            {bold(fileName)}
-            {muted(` on ${productName}`)}
-          </>
+        messageNode: line(
+          "DOWNLOAD_LIMIT_REACHED",
+          "{buyer} used up their downloads of {file} on {product}",
+          { buyer: buyerName, file: fileName, product: productName },
         ),
         /* Says what to DO, because the row exists for the seller's decision
            and the platform has already told the buyer to ask them. */
-        snippet: "They cannot download it again until you raise the limit.",
+        snippet: labels?.DOWNLOAD_LIMIT_REACHED_snippet
+          ?? "They cannot download it again until you raise the limit.",
         iconOnly: <SolidIcon type="ban" tone="yellow" />,
         isClickable: false,
       };
@@ -810,14 +832,16 @@ function buildMessage({
       const buyerName = (payload.buyerName as string) || "Someone";
       const saleAmount = payload.saleAmount as string | undefined;
       return {
-        messageNode: (
-          <>
-            {bold(buyerName)}
-            {muted(" bought ")}
-            {bold(productName)}
-            {saleAmount ? muted(` for ${saleAmount}`) : null}
-          </>
-        ),
+        messageNode: saleAmount
+          ? line("SALE_COMPLETED_withAmount", "{buyer} bought {product} for {amount}", {
+              buyer: buyerName,
+              product: productName,
+              amount: saleAmount,
+            })
+          : line("SALE_COMPLETED", "{buyer} bought {product}", {
+              buyer: buyerName,
+              product: productName,
+            }),
         iconOnly: <SolidIcon type="coin" tone="green" />,
         isClickable: false,
       };
@@ -826,13 +850,12 @@ function buildMessage({
     case "PURCHASE_COMPLETED": {
       const productName = (payload.productName as string) || "your purchase";
       return {
-        messageNode: (
-          <>
-            {muted("You bought ")}
-            {bold(productName)}
-            {muted(community.name ? ` in ${community.name}` : "")}
-          </>
-        ),
+        messageNode: community.name
+          ? line("PURCHASE_COMPLETED_inCommunity", "You bought {product} in {community}", {
+              product: productName,
+              community: community.name,
+            })
+          : line("PURCHASE_COMPLETED", "You bought {product}", { product: productName }),
         iconOnly: <SolidIcon type="package" tone="green" />,
         isClickable: false,
       };
@@ -842,16 +865,17 @@ function buildMessage({
       const productName = (payload.productName as string) || "your purchase";
       const refundAmount = payload.refundAmount as string | undefined;
       return {
-        messageNode: (
-          <>
-            {muted("Your refund for ")}
-            {bold(productName)}
-            {/* "has been issued", not "is in your account": the money has left
-                us, but when it lands is the card issuer's business, and
-                promising arrival here is how support tickets are made. */}
-            {muted(refundAmount ? ` has been issued, ${refundAmount}` : " has been issued")}
-          </>
-        ),
+        /* "has been issued", not "is in your account": the money has left us,
+           but when it lands is the card issuer's business, and promising
+           arrival here is how support tickets are made. */
+        messageNode: refundAmount
+          ? line("REFUND_COMPLETED_withAmount", "Your refund for {product} has been issued, {amount}", {
+              product: productName,
+              amount: refundAmount,
+            })
+          : line("REFUND_COMPLETED", "Your refund for {product} has been issued", {
+              product: productName,
+            }),
         iconOnly: <SolidIcon type="arrow-left" tone="blue" />,
         isClickable: false,
       };
@@ -862,14 +886,16 @@ function buildMessage({
       const buyerName = (payload.buyerName as string) || "A buyer";
       const refundAmount = payload.refundAmount as string | undefined;
       return {
-        messageNode: (
-          <>
-            {bold(buyerName)}
-            {muted(" was refunded for ")}
-            {bold(productName)}
-            {refundAmount ? muted(`, ${refundAmount}`) : null}
-          </>
-        ),
+        messageNode: refundAmount
+          ? line("SALE_REFUNDED_withAmount", "{buyer} was refunded for {product}, {amount}", {
+              buyer: buyerName,
+              product: productName,
+              amount: refundAmount,
+            })
+          : line("SALE_REFUNDED", "{buyer} was refunded for {product}", {
+              buyer: buyerName,
+              product: productName,
+            }),
         iconOnly: <SolidIcon type="arrow-left" tone="yellow" />,
         isClickable: false,
       };
@@ -878,13 +904,9 @@ function buildMessage({
     case "PAYOUT_CONFIRMED": {
       const payoutAmount = payload.payoutAmount as string | undefined;
       return {
-        messageNode: (
-          <>
-            {muted("Your payout of ")}
-            {bold(payoutAmount || "your earnings")}
-            {muted(" is on its way to your bank")}
-          </>
-        ),
+        messageNode: line("PAYOUT_CONFIRMED", "Your payout of {amount} is on its way to your bank", {
+          amount: payoutAmount || "your earnings",
+        }),
         iconOnly: <SolidIcon type="coin" tone="green" />,
         isClickable: false,
       };
@@ -894,14 +916,15 @@ function buildMessage({
       const payoutAmount = payload.payoutAmount as string | undefined;
       const reason = payload.failureReason as string | undefined;
       return {
-        messageNode: (
-          <>
-            {muted("Your payout")}
-            {payoutAmount ? muted(` of ${payoutAmount}`) : null}
-            {muted(" could not be sent. ")}
-            {bold("Check your payment details")}
-          </>
-        ),
+        messageNode: payoutAmount
+          ? line(
+              "PAYOUT_FAILED_withAmount",
+              "Your payout of {amount} could not be sent. {action}",
+              { amount: payoutAmount, action: labels?.PAYOUT_FAILED_action ?? "Check your payment details" },
+            )
+          : line("PAYOUT_FAILED", "Your payout could not be sent. {action}", {
+              action: labels?.PAYOUT_FAILED_action ?? "Check your payment details",
+            }),
         /* The reason is the actionable part and is often the only thing that
            tells a seller what to change, so it goes in the snippet rather than
            being dropped. */
@@ -915,13 +938,16 @@ function buildMessage({
       const itemName = (payload.itemName as string) || "your listing";
       const itemType = (payload.itemType as string) || "listing";
       return {
-        messageNode: (
-          <>
-            {muted(`Your ${itemType} `)}
-            {bold(itemName)}
-            {muted(community.name ? ` was approved in ${community.name}` : " was approved")}
-          </>
-        ),
+        messageNode: community.name
+          ? line("LISTING_APPROVED_inCommunity", "Your {itemType} {item} was approved in {community}", {
+              itemType,
+              item: itemName,
+              community: community.name,
+            })
+          : line("LISTING_APPROVED", "Your {itemType} {item} was approved", {
+              itemType,
+              item: itemName,
+            }),
         iconOnly: <SolidIcon type="check" tone="green" />,
         isClickable: false,
       };
@@ -931,13 +957,16 @@ function buildMessage({
       const itemName = (payload.itemName as string) || "your listing";
       const itemType = (payload.itemType as string) || "listing";
       return {
-        messageNode: (
-          <>
-            {muted(`Your ${itemType} `)}
-            {bold(itemName)}
-            {muted(community.name ? ` was declined in ${community.name}` : " was declined")}
-          </>
-        ),
+        messageNode: community.name
+          ? line("LISTING_REJECTED_inCommunity", "Your {itemType} {item} was declined in {community}", {
+              itemType,
+              item: itemName,
+              community: community.name,
+            })
+          : line("LISTING_REJECTED", "Your {itemType} {item} was declined", {
+              itemType,
+              item: itemName,
+            }),
         iconOnly: <SolidIcon type="x" tone="red" />,
         isClickable: false,
       };
@@ -947,13 +976,16 @@ function buildMessage({
       const itemName = (payload.itemName as string) || "your listing";
       const itemType = (payload.itemType as string) || "listing";
       return {
-        messageNode: (
-          <>
-            {muted(`Your ${itemType} `)}
-            {bold(itemName)}
-            {muted(community.name ? ` was deactivated in ${community.name}` : " was deactivated")}
-          </>
-        ),
+        messageNode: community.name
+          ? line("LISTING_DEACTIVATED_inCommunity", "Your {itemType} {item} was deactivated in {community}", {
+              itemType,
+              item: itemName,
+              community: community.name,
+            })
+          : line("LISTING_DEACTIVATED", "Your {itemType} {item} was deactivated", {
+              itemType,
+              item: itemName,
+            }),
         iconOnly: <SolidIcon type="ban" tone="yellow" />,
         isClickable: false,
       };
@@ -963,13 +995,10 @@ function buildMessage({
       const ownerName = (payload.ownerName as string) || actor.name;
       const itemName = (payload.itemName as string) || "a listing";
       return {
-        messageNode: (
-          <>
-            {bold(ownerName)}
-            {muted(" withdrew ")}
-            {bold(itemName)}
-          </>
-        ),
+        messageNode: line("LISTING_WITHDRAWN", "{owner} withdrew {item}", {
+          owner: ownerName,
+          item: itemName,
+        }),
         iconOnly: <SolidIcon type="arrow-left" tone="yellow" />,
         isClickable: false,
       };
@@ -977,36 +1006,27 @@ function buildMessage({
 
     case "LISTING_PROPOSAL":
       return {
-        messageNode: (
-          <>
-            {muted("New commission proposal for ")}
-            {bold((payload.itemName as string) || "your listing")}
-          </>
-        ),
+        messageNode: line("LISTING_PROPOSAL", "New commission proposal for {item}", {
+          item: (payload.itemName as string) || "your listing",
+        }),
         iconOnly: <SolidIcon type="coin" tone="blue" />,
         isClickable: false,
       };
 
     case "LISTING_PROPOSAL_ACCEPTED":
       return {
-        messageNode: (
-          <>
-            {muted("Commission agreed for ")}
-            {bold((payload.itemName as string) || "your listing")}
-          </>
-        ),
+        messageNode: line("LISTING_PROPOSAL_ACCEPTED", "Commission agreed for {item}", {
+          item: (payload.itemName as string) || "your listing",
+        }),
         iconOnly: <SolidIcon type="check" tone="green" />,
         isClickable: false,
       };
 
     case "LISTING_PROPOSAL_REJECTED":
       return {
-        messageNode: (
-          <>
-            {muted("Commission proposal declined for ")}
-            {bold((payload.itemName as string) || "your listing")}
-          </>
-        ),
+        messageNode: line("LISTING_PROPOSAL_REJECTED", "Commission proposal declined for {item}", {
+          item: (payload.itemName as string) || "your listing",
+        }),
         iconOnly: <SolidIcon type="x" tone="red" />,
         isClickable: false,
       };
@@ -1020,12 +1040,9 @@ function buildMessage({
       const appName = (payload.appName as string) || "";
       const bodyText = maybe(payload.body);
       return {
-        messageNode: (
-          <>
-            {bold(title)}
-            {appName ? muted(` · ${appName}`) : null}
-          </>
-        ),
+        messageNode: appName
+          ? line("APP_NOTIFICATION_withApp", "{title} \u00b7 {app}", { title, app: appName })
+          : line("APP_NOTIFICATION", "{title}", { title }),
         snippet: bodyText,
         // A box, not a checkmark: this is "an app is telling you something",
         // not "something completed".
@@ -1040,12 +1057,10 @@ function buildMessage({
       // Unknown type — render a generic activity row rather than dropping
       // the record silently. Mirrors the legacy renderer's fall-through.
       return {
-        messageNode: (
-          <>
-            {muted("New activity")}
-            {actor.name !== "Someone" ? <> {muted("from ")}{bold(actor.name)}</> : null}
-          </>
-        ),
+        messageNode:
+          actor.name !== "Someone"
+            ? line("UNKNOWN_withActor", "New activity from {actor}", { actor: actor.name })
+            : line("UNKNOWN", "New activity"),
         isClickable: false,
       };
   }

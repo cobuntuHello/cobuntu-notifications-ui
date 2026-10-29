@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import type { Notification, NotificationsAdapter, NotificationsDataSource } from "../types";
-import { NotificationRow } from "./NotificationRow";
+import { NotificationRow, type NotificationLabels } from "./NotificationRow";
 import { SectionHeader } from "./SectionHeader";
 import { EmptyState } from "./EmptyState";
 import { groupNotifications, type DisplayItem, type NotificationGroup } from "../utils/groupNotifications";
@@ -52,6 +52,12 @@ interface NotificationsViewProps {
    * Absent ⇒ no mute button (backward compatible).
    */
   onMuteThread?: (postId: string) => void;
+  /**
+   * Translated row templates, keyed by notification type. Optional: without
+   * it the rows read in English exactly as they do today. See
+   * `NotificationLabels` in NotificationRow for the template contract.
+   */
+  labels?: NotificationLabels;
 }
 
 /**
@@ -85,6 +91,7 @@ export function NotificationsView({
   renderAvatar,
   now,
   onMuteThread,
+  labels,
 }: NotificationsViewProps) {
   const { notifications, isLoading } = data;
 
@@ -128,7 +135,7 @@ export function NotificationsView({
     const { newItems, earlierItems } = partitionNewEarlier(items);
     return (
       <div>
-        {renderFlatSections(newItems, earlierItems, adapter, renderAvatar, now, onMuteThread)}
+        {renderFlatSections(newItems, earlierItems, adapter, renderAvatar, now, onMuteThread, labels)}
       </div>
     );
   }
@@ -170,6 +177,7 @@ export function NotificationsView({
               renderAvatar={renderAvatar}
               now={now}
               onMuteThread={onMuteThread}
+              labels={labels}
             />
           );
         })}
@@ -179,7 +187,7 @@ export function NotificationsView({
 
   return (
     <div>
-      {renderWithSections(displayItems, adapter, renderAvatar, now, onMuteThread)}
+      {renderWithSections(displayItems, adapter, renderAvatar, now, onMuteThread, labels)}
     </div>
   );
 }
@@ -190,6 +198,7 @@ function renderWithSections(
   renderAvatar: NotificationsViewProps["renderAvatar"],
   now: Date | undefined,
   onMuteThread: NotificationsViewProps["onMuteThread"],
+  labels: NotificationsViewProps["labels"],
 ) {
   let currentSection: string | null = null;
   const out: React.ReactNode[] = [];
@@ -213,6 +222,7 @@ function renderWithSections(
         renderAvatar={renderAvatar}
         now={now}
         onMuteThread={onMuteThread}
+        labels={labels}
       />,
     );
   }
@@ -270,6 +280,7 @@ function renderFlatSections(
   renderAvatar: NotificationsViewProps["renderAvatar"],
   now: Date | undefined,
   onMuteThread: NotificationsViewProps["onMuteThread"],
+  labels: NotificationsViewProps["labels"],
 ) {
   const out: React.ReactNode[] = [];
 
@@ -286,6 +297,7 @@ function renderFlatSections(
           renderAvatar={renderAvatar}
           now={now}
           onMuteThread={onMuteThread}
+          labels={labels}
         />,
       );
     }

@@ -7,5 +7,5 @@ export {
 } from "./NotificationAvatarBadge";
 export { SectionHeader } from "./SectionHeader";
 export { EmptyState } from "./EmptyState";
-export { NotificationRow } from "./NotificationRow";
+export { NotificationRow, type NotificationLabels } from "./NotificationRow";
 export { NotificationsView } from "./NotificationsView";
