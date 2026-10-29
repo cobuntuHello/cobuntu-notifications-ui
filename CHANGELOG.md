@@ -4,6 +4,19 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.11.0 — 2026-10-29
+
+### Added
+- **`destinationFor`, and rows that go somewhere.** Nine row types resolved no destination and did nothing when clicked: every listing decision, every commerce row, course completion. A notification whose job is to say something happened to a *specific thing* should put you in front of that thing, and while every row looked identically clickable, each click that did nothing taught the member that the bell is decorative.
+
+The principle throughout is **land on the thing, in the state that allows the next action**. `PAYOUT_FAILED` goes to the payouts screen where the bank details are fixed, not to a generic index. A sale goes to the ledger, because the fee and the payout are what a seller opens it for. Listing rows go to the artifact itself, built from the `itemHandle` the backend now resolves.
+
+### Why no new adapter callback
+The adapter could have grown `onProductClick`, `onSaleClick` and so on, with every consumer implementing them. It already has `onUrlClick` — wired, and already routing an in-app path through the host's router rather than a page load. The path is built here and handed to that, so the package stays exactly as router-agnostic as before and asks nothing new of the host.
+
+### A row with nowhere to go stays dead
+`destinationFor` returns null when the payload cannot name a destination, and `isClickable` follows it. So a row only invites a click once it can deliver one — which also means these light up gradually as the backend enrichment fills in handles, rather than all at once with half of them broken.
+
 ## 1.10.0 — 2026-10-29
 
 ### Added

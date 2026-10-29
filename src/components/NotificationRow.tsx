@@ -10,6 +10,7 @@ import { VerifiedBadge } from "./VerifiedBadge";
 import { formatTimeAgo } from "../utils/formatTimeAgo";
 import { cleanMentionMarkup } from "../utils/cleanMentionMarkup";
 import { formatGroupSummary, type NotificationGroup } from "../utils/groupNotifications";
+import { destinationFor } from "../utils/notificationDestination";
 
 interface NotificationRowProps {
   item: Notification | NotificationGroup;
@@ -197,6 +198,21 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
       }
       return;
     }
+    /*
+     * A platform destination, built from the payload and handed to the same
+     * callback an app-supplied link uses. Placed after APP_NOTIFICATION
+     * (whose own URL wins) and before the post/profile fallbacks, which are
+     * for the social rows that have no artifact of their own.
+     */
+    const destination = destinationFor({ type: n.type, payload });
+    if (destination) {
+      if (adapter.onUrlClick) {
+        adapter.onUrlClick(destination);
+      } else if (typeof window !== "undefined") {
+        window.location.assign(destination);
+      }
+      return;
+    }
     if (postId && community.communityTag && adapter.onPostClick) {
       adapter.onPostClick(community.communityTag, postId);
       return;
@@ -239,7 +255,16 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
         locale,
         renderAvatar,
       });
-  const { messageNode, snippet, overlay, overlayTone, iconOnly, isClickable } = built;
+  const { messageNode, snippet, overlay, overlayTone, iconOnly } = built;
+  /*
+   * A row is clickable if its own case says so OR a destination resolves.
+   * Nine types previously said `isClickable: false` because there was
+   * nowhere to go; they now become live the moment the payload carries the
+   * handle, and stay dead when it does not -- so the hover never promises a
+   * click that would do nothing.
+   */
+  const isClickable =
+    built.isClickable || destinationFor({ type: n.type, payload }) !== null;
 
   // ─── Friend-request rows get inline accept/reject actions ───────
   const isFriendRequestInbound = n.type === "FRIEND_REQUEST_INBOUND";
