@@ -4,6 +4,24 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.7.0 — 2026-10-29
+
+Every row in this package was hardcoded English. The community app ships in 24 locales and its notification SETTINGS screen is fully translated, so a Portuguese member could read a translated row name in settings, open the bell, and be told "was added to" in English. The package was the one place in that loop with no way in for copy.
+
+### Added
+- `NotificationLabels`: an optional `labels` prop on `NotificationsView` and `NotificationRow`, mapping a notification type to a message template. Templates are sentences with `{named}` slots (`"{buyer} bought {product}"`); literal text renders muted, a slot renders emphasised, and a slot whose value is already a node (an actor name followed by a verified badge) renders as-is.
+- Variant keys where one sentence has two shapes. A sale with a known amount and one without are different sentences, not one sentence with an empty slot, and a translator needs both: `SALE_COMPLETED` and `SALE_COMPLETED_withAmount`.
+
+### Changed
+- All 56 `buildMessage` cases now build their sentence from a template instead of hand-assembling muted/bold fragments inline.
+- `COURSE_LESSON_PUBLISHED`'s fallback course name: "a course you own" read as "a course you authored", which is the opposite party. This row only ever goes to the learner, so it is "a course you bought".
+
+### Compatibility
+Entirely additive. A consumer that passes no `labels` gets byte-identical output: the host app's 99 renderer-parity and type-coverage tests pass unchanged against this version. A map missing a key falls back to that key's English, so a locale can be translated one row at a time.
+
+### Not covered, deliberately
+`formatGroupSummary` ("3 reactions and 2 comments on your post") and `renderActorNames` (the " and " joiner, the "N others" tail, the "Someone" fallback) stay English. Both need real plural rules; a one/many table is already wrong for any language with more than two forms, and routing them through this template system would hardcode the English plural model into two more places. They want `Intl.PluralRules` and a list formatter, which is its own change.
+
 ## 1.3.0 — 2026-08-07
 
 App platform P2.6: installed apps can now send a member a bell notification, so the row renderer has to handle copy it did not author.
