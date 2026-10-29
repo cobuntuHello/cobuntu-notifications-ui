@@ -372,16 +372,39 @@ function Row({
   isUnread?: boolean;
 }) {
   const interactive = !!onClick;
+  const [hovered, setHovered] = React.useState(false);
   return (
     <div
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       onClick={onClick}
       onKeyDown={interactive ? (e) => (e.key === "Enter" || e.key === " ") && onClick?.() : undefined}
+      /*
+       * Hover, and ONLY where the row leads somewhere.
+       *
+       * This used to set `transition-colors` and a pointer and then never
+       * define a hover background, so the transition had nothing to
+       * transition -- the class was right there in the markup and nothing
+       * happened on screen.
+       *
+       * Gating it on `interactive` is the point rather than a detail: nine
+       * row types resolve no destination today, and while every row looked
+       * identically clickable, each click that did nothing taught the member
+       * that the bell is decorative. A row that cannot go anywhere should not
+       * invite the click.
+       */
       className={`block px-4 py-2.5 transition-colors ${interactive ? "cursor-pointer" : ""}`}
+      onMouseEnter={interactive ? () => setHovered(true) : undefined}
+      onMouseLeave={interactive ? () => setHovered(false) : undefined}
       // Unread treatment is NEUTRAL (no brand color): a subtle grey fill
       // + bolder text + a grey dot, so it also reads on mobile.
-      style={{ background: isUnread ? "rgba(128,128,128,0.06)" : "transparent" }}
+      style={{
+        background: hovered
+          ? "rgba(128,128,128,0.11)"
+          : isUnread
+            ? "rgba(128,128,128,0.06)"
+            : "transparent",
+      }}
     >
       <div className="flex items-center gap-3">
         {leadingIcon}
@@ -1013,32 +1036,64 @@ function buildMessage({
       };
     }
 
-    case "LISTING_PROPOSAL":
+    case "LISTING_PROPOSAL": {
+      /*
+       * The RATE, which every one of these payloads already carries and none
+       * of these rows showed. "New commission proposal for X" told a seller
+       * nothing they could act on: the whole question is what the number is,
+       * and answering it costs nothing because listingNotifications already
+       * sends `commissionRate` with all three proposal notifications.
+       *
+       * Rendered as an integer percent. The field is a number, so a stored 12
+       * means 12% -- no arithmetic here, for the same reason the money rows
+       * do none: the sender owns the unit.
+       */
+      const rate = typeof payload.commissionRate === "number" ? payload.commissionRate : null;
+      const item = (payload.itemName as string) || "your listing";
       return {
-        messageNode: line("LISTING_PROPOSAL", "New commission proposal for {item}", {
-          item: (payload.itemName as string) || "your listing",
-        }),
+        messageNode:
+          rate !== null
+            ? line("LISTING_PROPOSAL_withRate", "New commission proposal for {item}, {rate}%", {
+                item,
+                rate: String(rate),
+              })
+            : line("LISTING_PROPOSAL", "New commission proposal for {item}", { item }),
         iconOnly: <SolidIcon type="coin" tone="blue" />,
         isClickable: false,
       };
+    }
 
-    case "LISTING_PROPOSAL_ACCEPTED":
+    case "LISTING_PROPOSAL_ACCEPTED": {
+      const rate = typeof payload.commissionRate === "number" ? payload.commissionRate : null;
+      const item = (payload.itemName as string) || "your listing";
       return {
-        messageNode: line("LISTING_PROPOSAL_ACCEPTED", "Commission agreed for {item}", {
-          item: (payload.itemName as string) || "your listing",
-        }),
+        messageNode:
+          rate !== null
+            ? line("LISTING_PROPOSAL_ACCEPTED_withRate", "Commission agreed for {item}, {rate}%", {
+                item,
+                rate: String(rate),
+              })
+            : line("LISTING_PROPOSAL_ACCEPTED", "Commission agreed for {item}", { item }),
         iconOnly: <SolidIcon type="check" tone="green" />,
         isClickable: false,
       };
+    }
 
-    case "LISTING_PROPOSAL_REJECTED":
+    case "LISTING_PROPOSAL_REJECTED": {
+      const rate = typeof payload.commissionRate === "number" ? payload.commissionRate : null;
+      const item = (payload.itemName as string) || "your listing";
       return {
-        messageNode: line("LISTING_PROPOSAL_REJECTED", "Commission proposal declined for {item}", {
-          item: (payload.itemName as string) || "your listing",
-        }),
+        messageNode:
+          rate !== null
+            ? line("LISTING_PROPOSAL_REJECTED_withRate", "Commission proposal declined for {item}, {rate}%", {
+                item,
+                rate: String(rate),
+              })
+            : line("LISTING_PROPOSAL_REJECTED", "Commission proposal declined for {item}", { item }),
         iconOnly: <SolidIcon type="x" tone="red" />,
         isClickable: false,
       };
+    }
 
     case "APP_NOTIFICATION": {
       // The only type whose copy the platform did not author. An installed app
@@ -1171,14 +1226,52 @@ function Glyph({ type }: { type: "heart" | "check" | "people" }) {
   );
 }
 
+const INHERIT = "var(--text-color, currentColor)";
+
+/**
+ * The four semantic states a row can be in, plus neutral.
+ *
+ * Deliberately not tokens: a community sets --brand-color, and if these read
+ * from it then a community with a red brand would have every notification
+ * look critical. What happened to your money is not a branding decision.
+ *
+ * Both halves are tuned to sit on either theme ground -- the fills are low
+ * alpha so they darken rather than glare, and the foregrounds are picked to
+ * clear 4.5:1 against both.
+ */
+const TONES: Record<string, { bg: string; fg: string }> = {
+  green:  { bg: "rgba(47,125,79,0.14)",  fg: "#2f7d4f" },
+  red:    { bg: "rgba(166,50,50,0.14)",  fg: "#a63232" },
+  yellow: { bg: "rgba(154,101,20,0.16)", fg: "#9a6514" },
+  blue:   { bg: "rgba(47,95,143,0.14)",  fg: "#2f5f8f" },
+  neutral:{ bg: "rgba(128,128,128,0.10)", fg: INHERIT },
+};
+
 function SolidIcon({
   type,
+  tone = "neutral",
 }: {
   type: "shield" | "star" | "package" | "ban" | "arrow-left" | "coin" | "x" | "check";
-  // `tone` is still accepted from call sites for readability but is no
-  // longer used for color — system icons are NEUTRAL (muted grey), not
-  // brand/semantic-tinted, per the PR-2 redesign.
-  tone?: "red" | "green" | "yellow" | "blue";
+  /*
+   * Tone is honoured again.
+   *
+   * It used to be accepted and thrown away -- "system icons are NEUTRAL
+   * (muted grey), not brand/semantic-tinted, per the PR-2 redesign" -- while
+   * twelve call sites went on passing green, red, yellow and blue into
+   * nothing.
+   *
+   * Neutral was the right call when a bell carried reactions and mentions:
+   * colour there is decoration, and a column of coloured dots is noise. It
+   * stopped being right once the same list started carrying refunds, failed
+   * payouts, disputes and deadlines. A member scanning twenty rows needs to
+   * find the one that costs money, and shape alone does not do that at 40px.
+   *
+   * So: four semantic states, never the brand hue. The colour means what
+   * HAPPENED, not whose product it is, which is also why these are fixed
+   * values rather than community custom properties -- a community whose brand
+   * is red must not have every row read as critical.
+   */
+  tone?: "red" | "green" | "yellow" | "blue" | "neutral";
 }) {
   const path = (() => {
     switch (type) {
@@ -1201,17 +1294,18 @@ function SolidIcon({
     }
   })();
 
+  const palette = TONES[tone] ?? TONES.neutral;
   return (
     <div
       className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-      style={{ background: "rgba(128,128,128,0.10)" }}
+      style={{ background: palette.bg }}
     >
       <svg
         width="18"
         height="18"
         viewBox="0 0 24 24"
         fill="currentColor"
-        style={{ color: "var(--text-color, currentColor)", opacity: 0.6 }}
+        style={{ color: palette.fg, opacity: palette.fg === INHERIT ? 0.6 : 1 }}
       >
         {path}
       </svg>
