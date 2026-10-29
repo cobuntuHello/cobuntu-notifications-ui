@@ -58,6 +58,11 @@ interface NotificationsViewProps {
    * `NotificationLabels` in NotificationRow for the template contract.
    */
   labels?: NotificationLabels;
+  /**
+   * BCP-47 tag, for plural agreement and list punctuation in the grouped
+   * rows. Omitted, Intl uses the runtime default.
+   */
+  locale?: string;
 }
 
 /**
@@ -92,6 +97,7 @@ export function NotificationsView({
   now,
   onMuteThread,
   labels,
+  locale,
 }: NotificationsViewProps) {
   const { notifications, isLoading } = data;
 
@@ -135,7 +141,7 @@ export function NotificationsView({
     const { newItems, earlierItems } = partitionNewEarlier(items);
     return (
       <div>
-        {renderFlatSections(newItems, earlierItems, adapter, renderAvatar, now, onMuteThread, labels)}
+        {renderFlatSections(newItems, earlierItems, adapter, renderAvatar, now, onMuteThread, labels, locale)}
       </div>
     );
   }
@@ -178,6 +184,7 @@ export function NotificationsView({
               now={now}
               onMuteThread={onMuteThread}
               labels={labels}
+              locale={locale}
             />
           );
         })}
@@ -187,7 +194,7 @@ export function NotificationsView({
 
   return (
     <div>
-      {renderWithSections(displayItems, adapter, renderAvatar, now, onMuteThread, labels)}
+      {renderWithSections(displayItems, adapter, renderAvatar, now, onMuteThread, labels, locale)}
     </div>
   );
 }
@@ -199,6 +206,7 @@ function renderWithSections(
   now: Date | undefined,
   onMuteThread: NotificationsViewProps["onMuteThread"],
   labels: NotificationsViewProps["labels"],
+  locale: NotificationsViewProps["locale"],
 ) {
   let currentSection: string | null = null;
   const out: React.ReactNode[] = [];
@@ -223,6 +231,7 @@ function renderWithSections(
         now={now}
         onMuteThread={onMuteThread}
         labels={labels}
+        locale={locale}
       />,
     );
   }
@@ -281,6 +290,7 @@ function renderFlatSections(
   now: Date | undefined,
   onMuteThread: NotificationsViewProps["onMuteThread"],
   labels: NotificationsViewProps["labels"],
+  locale: NotificationsViewProps["locale"],
 ) {
   const out: React.ReactNode[] = [];
 
@@ -298,6 +308,7 @@ function renderFlatSections(
           now={now}
           onMuteThread={onMuteThread}
           labels={labels}
+          locale={locale}
         />,
       );
     }

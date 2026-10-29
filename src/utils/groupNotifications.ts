@@ -1,4 +1,7 @@
 import type { Notification, NotificationType } from "../types";
+import { formatCount, joinList, pluralCategory, type TextOptions } from "./intlText";
+
+export type { TextOptions };
 
 /**
  * Post-activity notification types. Ambient activity on the SAME post
@@ -225,17 +228,31 @@ export function groupNotifications(notifications: Notification[]): DisplayItem[]
  *   3     → "Becky, Ana and Carl"
  *   4+    → "Becky, Ana and 2 others"
  */
-export function formatActorNames(actors: { name: string }[], maxNames = 2): string {
-  if (actors.length === 0) return "Someone";
+/** Host copy for a key, else the English built in here. */
+function copy(labels: Record<string, string> | undefined, key: string, fallback: string): string {
+  const supplied = labels?.[key];
+  return typeof supplied === "string" && supplied !== "" ? supplied : fallback;
+}
+
+export function formatActorNames(
+  actors: { name: string }[],
+  maxNames = 2,
+  opts: TextOptions = {},
+): string {
+  const { locale, labels } = opts;
+  if (actors.length === 0) return copy(labels, "actors_someone", "Someone");
   if (actors.length === 1) return actors[0].name;
-  if (actors.length === 2) return `${actors[0].name} and ${actors[1].name}`;
   if (actors.length <= maxNames + 1) {
-    const leading = actors.slice(0, -1).map((a) => a.name).join(", ");
-    return `${leading} and ${actors[actors.length - 1].name}`;
+    return joinList(actors.map((a) => a.name), locale);
   }
-  const leading = actors.slice(0, maxNames).map((a) => a.name).join(", ");
+  const named = actors.slice(0, maxNames).map((a) => a.name);
   const remaining = actors.length - maxNames;
-  return `${leading} and ${remaining} other${remaining > 1 ? "s" : ""}`;
+  const others = copy(
+    labels,
+    `actors_others_${pluralCategory(remaining, locale)}`,
+    remaining === 1 ? "{count} other" : "{count} others",
+  ).replace("{count}", formatCount(remaining, locale));
+  return joinList([...named, others], locale);
 }
 
 /**
@@ -246,13 +263,25 @@ export function formatActorNames(actors: { name: string }[], maxNames = 2): stri
  * Single-kind groups keep the "<names> reacted to your post" phrasing
  * and don't use this. Nouns pluralize on the individual count.
  */
-export function formatGroupSummary(kindCounts: KindCount[]): string {
+export function formatGroupSummary(kindCounts: KindCount[], opts: TextOptions = {}): string {
+  const { locale, labels } = opts;
   const parts = kindCounts.map(({ kind, count }) => {
-    const noun = count === 1 ? KIND_NOUN[kind].one : KIND_NOUN[kind].many;
-    return `${count} ${noun}`;
+    const category = pluralCategory(count, locale);
+    /*
+     * The noun is looked up per PLURAL CATEGORY, not per one/many. English has
+     * two categories so `group_reaction_one` / `group_reaction_other` covers
+     * it, and the fallbacks below are exactly the old table; a language with
+     * three or six categories supplies the rest and gets correct agreement
+     * instead of the nearest English approximation.
+     */
+    const noun = copy(
+      labels,
+      `group_${kind}_${category}`,
+      category === "one" ? KIND_NOUN[kind].one : KIND_NOUN[kind].many,
+    );
+    return copy(labels, "group_countedNoun", "{count} {noun}")
+      .replace("{count}", formatCount(count, locale))
+      .replace("{noun}", noun);
   });
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return joinList(parts, locale);
 }

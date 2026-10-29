@@ -165,14 +165,43 @@ describe("formatGroupSummary", () => {
     );
   });
 
-  it("joins three kinds with commas + 'and'", () => {
-    expect(
-      formatGroupSummary([
-        { kind: "reaction", count: 5 },
-        { kind: "comment", count: 2 },
-        { kind: "mention", count: 1 },
-      ]),
-    ).toBe("5 reactions, 2 comments and 1 mention");
+  it("joins three kinds the way the locale joins a list", () => {
+    /*
+     * Pinned against an EXPLICIT locale, not the runtime default. These used
+     * to assert the hand-rolled ", " + " and ", which is the en-GB form; the
+     * joining is Intl.ListFormat's job now, and `en` (like en-US) takes the
+     * Oxford comma while en-GB does not. Asserting the runtime default would
+     * make this test pass or fail depending on the machine it runs on.
+     */
+    const counts = [
+      { kind: "reaction" as const, count: 5 },
+      { kind: "comment" as const, count: 2 },
+      { kind: "mention" as const, count: 1 },
+    ];
+    expect(formatGroupSummary(counts, { locale: "en-GB" })).toBe(
+      "5 reactions, 2 comments and 1 mention",
+    );
+    expect(formatGroupSummary(counts, { locale: "en-US" })).toBe(
+      "5 reactions, 2 comments, and 1 mention",
+    );
+  });
+
+  it("takes its nouns per plural category, not per one/many", () => {
+    /*
+     * The whole reason for the change. A host supplies a noun for each plural
+     * category its language has; English has two, so two keys cover it.
+     */
+    const labels = {
+      group_reaction_one: "rea\u00e7\u00e3o",
+      group_reaction_other: "rea\u00e7\u00f5es",
+      group_countedNoun: "{count} {noun}",
+    };
+    expect(formatGroupSummary([{ kind: "reaction", count: 1 }], { locale: "pt-PT", labels })).toBe(
+      "1 rea\u00e7\u00e3o",
+    );
+    expect(formatGroupSummary([{ kind: "reaction", count: 5 }], { locale: "pt-PT", labels })).toBe(
+      "5 rea\u00e7\u00f5es",
+    );
   });
 
   it("renders a single kind without a connector", () => {
@@ -193,24 +222,40 @@ describe("formatActorNames", () => {
     expect(formatActorNames([{ name: "Becky" }, { name: "Ana" }])).toBe("Becky and Ana");
   });
 
-  it("renders three names with comma + 'and'", () => {
-    expect(formatActorNames([{ name: "Becky" }, { name: "Ana" }, { name: "Carl" }])).toBe(
-      "Becky, Ana and Carl"
-    );
+  it("renders three names the way the locale joins a list", () => {
+    const actors = [{ name: "Becky" }, { name: "Ana" }, { name: "Carl" }];
+    expect(formatActorNames(actors, 2, { locale: "en-GB" })).toBe("Becky, Ana and Carl");
+    // Not an English assumption any more: the conjunction comes from the locale.
+    expect(formatActorNames(actors, 2, { locale: "pt-PT" })).toBe("Becky, Ana e Carl");
   });
 
   it("renders 4+ names with 'N others'", () => {
     expect(
-      formatActorNames([{ name: "Becky" }, { name: "Ana" }, { name: "Carl" }, { name: "Dee" }])
-    ).toBe("Becky, Ana and 2 others");
-  });
-
-  it("singularizes 'other' for exactly 1 other", () => {
-    expect(
       formatActorNames(
         [{ name: "Becky" }, { name: "Ana" }, { name: "Carl" }, { name: "Dee" }],
         2,
+        { locale: "en-GB" },
       )
     ).toBe("Becky, Ana and 2 others");
+  });
+
+  it("names the last person rather than calling them '1 other'", () => {
+    /*
+     * This test used to be called "singularizes 'other' for exactly 1 other"
+     * and passed maxNames=2 with four actors, so `remaining` was 2 and it
+     * never exercised a singular at all.
+     *
+     * It cannot: "1 other" is unreachable by construction. For `remaining` to
+     * be 1 you need actors.length === maxNames + 1, and that hits the
+     * name-everyone branch first -- deliberately, because naming the last
+     * person is strictly better than counting them. The singular noun is kept
+     * for hosts whose plural rules put a different category at 1 and for
+     * anyone calling the helper directly, but this path never produces it.
+     */
+    expect(
+      formatActorNames([{ name: "Becky" }, { name: "Ana" }, { name: "Carl" }, { name: "Dee" }], 3, {
+        locale: "en-GB",
+      })
+    ).toBe("Becky, Ana, Carl and Dee");
   });
 });
