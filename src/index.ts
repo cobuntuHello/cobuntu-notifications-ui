@@ -26,6 +26,7 @@ export type {
 } from "./types";
 
 // ─── Utilities (PR 2) ─────────────────────────────────────────────
+export { destinationFor } from "./utils/notificationDestination";
 export { getTimeSection } from "./utils/getTimeSection";
 export { formatTimeAgo } from "./utils/formatTimeAgo";
 export { cleanMentionMarkup } from "./utils/cleanMentionMarkup";
