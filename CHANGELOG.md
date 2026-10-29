@@ -4,6 +4,18 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.9.0 — 2026-10-29
+
+Three things the rows were not saying, found in a design audit of the bell.
+
+### Changed
+- **Semantic tone is honoured again.** `SolidIcon` accepted a `tone` and threw it away ("system icons are NEUTRAL... per the PR-2 redesign") while twelve call sites went on passing `green`, `red`, `yellow` and `blue` into nothing. Neutral was right for a bell carrying reactions and mentions, where colour is decoration. It stopped being right once the same list started carrying refunds, failed payouts, disputes and deadlines: a member scanning twenty rows has to find the one that costs money, and shape alone does not do that at 40px. Four states, tinting the tile as well as the glyph.
+- **The tones are hardcoded, deliberately.** They do not read `--brand-color`: a community whose brand is red must not have every notification read as critical. Colour means state, not whose product it is. Pinned by a test.
+- **The three commission-proposal rows show the rate.** `commissionRate` travels with every one of those payloads and was dropped at the last step, so "New commission proposal for X" told a seller nothing they could act on. Now "…for X, 12%", with its own template key so a translator can place the number.
+
+### Added
+- **Hover on rows that go somewhere.** The row set `transition-colors` and a pointer and never defined a hover background, so the transition had nothing to transition. It is gated on interactivity on purpose: nine row types resolve no destination, and while every row looked identically clickable, each click that did nothing taught the member that the bell is decorative.
+
 ## 1.8.0 — 2026-10-29
 
 Closes the gap 1.7.0 left open. The two surfaces that ASSEMBLE a sentence rather than filling one in were still English: `formatGroupSummary` ("3 reactions and 2 comments") and `renderActorNames` ("Alex, Sam and 3 others"). Both built their English by hand, from a `{ one, many }` noun table and literal `", "` / `" and "`.

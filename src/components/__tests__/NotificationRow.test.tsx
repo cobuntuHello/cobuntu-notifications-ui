@@ -361,17 +361,59 @@ describe("NotificationRow", () => {
     expect(container.querySelector("p.font-semibold")).toBeNull();
   });
 
-  it("renders system (non-social) icons on a NEUTRAL grey circle, not a brand/semantic tint", () => {
+  /*
+   * This used to assert the opposite: "renders system icons on a NEUTRAL grey
+   * circle, not a brand/semantic tint". That was the right call for a bell
+   * carrying reactions and mentions, where colour is decoration and a column
+   * of coloured dots is noise.
+   *
+   * It stopped being right once the same list started carrying refunds,
+   * failed payouts, disputes and deadlines. A member scanning twenty rows has
+   * to find the one that costs money, and shape alone does not do that at
+   * 40px. So tone is honoured again -- as four semantic states, never the
+   * brand hue, which is the half of the original decision that still holds
+   * and is pinned by the test below.
+   */
+  it("tints a system icon by what HAPPENED", () => {
     const item = makeNotif({
       type: "POST_REMOVED_FROM_COMMUNITY",
       payload: { community: { name: "Desconversados" } },
     });
     const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
-    const iconSvg = container.querySelector("svg");
-    const circle = iconSvg?.parentElement as HTMLElement;
-    // Neutral grey fill (128,128,128); NOT the old red 239,68,68 tint.
-    expect(circle.style.background).toMatch(/128,\s*128,\s*128/);
-    expect(circle.style.background).not.toContain("239");
+    const circle = container.querySelector("svg")?.parentElement as HTMLElement;
+    // A removal is critical, so red — not the old flat grey.
+    expect(circle.style.background).toMatch(/166,\s*50,\s*50/);
+    expect(circle.style.background).not.toMatch(/128,\s*128,\s*128/);
+  });
+
+  it("never takes a row's tone from the community's brand colour", () => {
+    /*
+     * The half of the neutral decision that still stands, and the reason
+     * these five values are hardcoded rather than read from a custom
+     * property: a community whose brand is red must not have every
+     * notification read as critical. Colour here means state, not whose
+     * product it is.
+     */
+    const item = makeNotif({ type: "LISTING_APPROVED", payload: { itemName: "A thing" } });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    const circle = container.querySelector("svg")?.parentElement as HTMLElement;
+    expect(circle.style.background).not.toContain("--brand");
+    expect(circle.style.background).toMatch(/47,\s*125,\s*79/); // approved is green
+  });
+
+  it("hovers only on a row that goes somewhere", () => {
+    /*
+     * The row set `transition-colors` and a pointer and never defined a hover
+     * background, so the transition had nothing to transition. Gating it on
+     * interactivity is the point rather than a detail: while every row looked
+     * identically clickable, each click that did nothing taught the member
+     * that the bell is decorative.
+     */
+    const dead = makeNotif({ type: "LISTING_APPROVED", payload: { itemName: "A thing" } });
+    const { container } = render(<NotificationRow item={dead} adapter={{}} now={now} />);
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.getAttribute("role")).not.toBe("button");
+    expect(row.className).not.toContain("cursor-pointer");
   });
 
   it("shows the mute button on a post-group ONLY when onMuteThread is provided, and fires it with the postId", () => {
