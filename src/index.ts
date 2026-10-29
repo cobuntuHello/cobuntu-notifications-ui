@@ -30,6 +30,13 @@ export { getTimeSection } from "./utils/getTimeSection";
 export { formatTimeAgo } from "./utils/formatTimeAgo";
 export { cleanMentionMarkup } from "./utils/cleanMentionMarkup";
 export {
+  formatCount,
+  joinList,
+  listSeparators,
+  pluralCategory,
+  type TextOptions,
+} from "./utils/intlText";
+export {
   groupNotifications,
   formatActorNames,
   formatGroupSummary,

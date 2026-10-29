@@ -1,4 +1,5 @@
 import React, { ReactNode } from "react";
+import { formatCount, listSeparators, pluralCategory, type TextOptions } from "../utils/intlText";
 import { Avatar } from "./Avatar";
 import { VerifiedBadge } from "./VerifiedBadge";
 
@@ -122,51 +123,68 @@ function NameWithBadge({ name, isVerified }: { name: string; isVerified?: boolea
  */
 export function renderActorNames(
   actors: { name: string; isVerified?: boolean | null }[],
-  maxNames = 2,
+  maxNamesOrOptions: number | (TextOptions & { maxNames?: number }) = 2,
 ): ReactNode {
-  if (actors.length === 0) return <span className="font-medium">Someone</span>;
-  if (actors.length === 1) return <NameWithBadge name={actors[0].name} isVerified={actors[0].isVerified} />;
+  /*
+   * Second argument stayed positional-compatible on purpose: it is exported
+   * from the package root, so cobuntu-frontend may be calling
+   * renderActorNames(actors, 2) today and must keep working untouched.
+   */
+  const options =
+    typeof maxNamesOrOptions === "number" ? { maxNames: maxNamesOrOptions } : maxNamesOrOptions;
+  const maxNames = options.maxNames ?? 2;
+  const { locale, labels } = options;
+  const text = (key: string, fallback: string) => {
+    const supplied = labels?.[key];
+    return typeof supplied === "string" && supplied !== "" ? supplied : fallback;
+  };
 
-  if (actors.length === 2) {
+  /*
+   * The names are NODES -- each carries its own verified badge -- so they
+   * cannot be handed to Intl.ListFormat.format(). listSeparators() asks the
+   * locale for the literal pieces it puts between list items and hands them
+   * back in order, and they are interleaved here. The list ends up punctuated
+   * by the locale without the package ever flattening the names to a string.
+   */
+  const interleave = (nodes: ReactNode[]): ReactNode => {
+    const separators = listSeparators(nodes.length, locale);
     return (
       <>
-        <NameWithBadge name={actors[0].name} isVerified={actors[0].isVerified} />
-        <span style={{ opacity: 0.6 }}> and </span>
-        <NameWithBadge name={actors[1].name} isVerified={actors[1].isVerified} />
-      </>
-    );
-  }
-
-  if (actors.length <= maxNames + 1) {
-    return (
-      <>
-        {actors.slice(0, -1).map((a, i) => (
+        {nodes.map((node, i) => (
           <React.Fragment key={i}>
-            {i > 0 && <span style={{ opacity: 0.6 }}>, </span>}
-            <NameWithBadge name={a.name} isVerified={a.isVerified} />
+            {i > 0 && <span style={{ opacity: 0.6 }}>{separators[i - 1]}</span>}
+            {node}
           </React.Fragment>
         ))}
-        <span style={{ opacity: 0.6 }}> and </span>
-        <NameWithBadge
-          name={actors[actors.length - 1].name}
-          isVerified={actors[actors.length - 1].isVerified}
-        />
       </>
     );
+  };
+  if (actors.length === 0) {
+    return <span className="font-medium">{text("actors_someone", "Someone")}</span>;
+  }
+  if (actors.length === 1) {
+    return <NameWithBadge name={actors[0].name} isVerified={actors[0].isVerified} />;
   }
 
+  const named = (slice: typeof actors) =>
+    slice.map((a, i) => <NameWithBadge key={i} name={a.name} isVerified={a.isVerified} />);
+
+  // Everyone fits: one list, punctuated by the locale.
+  if (actors.length <= maxNames + 1) return interleave(named(actors));
+
+  /*
+   * Too many to name. The tail is "N others", whose noun agrees with N by
+   * PLURAL CATEGORY rather than by "is it 1" -- Polish has three categories
+   * and Arabic six, so one/many picks the wrong word in most of them.
+   */
   const remaining = actors.length - maxNames;
-  return (
-    <>
-      {actors.slice(0, maxNames).map((a, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <span style={{ opacity: 0.6 }}>, </span>}
-          <NameWithBadge name={a.name} isVerified={a.isVerified} />
-        </React.Fragment>
-      ))}
-      <span style={{ opacity: 0.6 }}>
-        {" "}and {remaining} other{remaining > 1 ? "s" : ""}
-      </span>
-    </>
-  );
+  const others = text(
+    `actors_others_${pluralCategory(remaining, locale)}`,
+    remaining === 1 ? "{count} other" : "{count} others",
+  ).replace("{count}", formatCount(remaining, locale));
+
+  return interleave([
+    ...named(actors.slice(0, maxNames)),
+    <span key="others" style={{ opacity: 0.6 }}>{others}</span>,
+  ]);
 }

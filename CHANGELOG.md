@@ -4,6 +4,25 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.8.0 — 2026-10-29
+
+Closes the gap 1.7.0 left open. The two surfaces that ASSEMBLE a sentence rather than filling one in were still English: `formatGroupSummary` ("3 reactions and 2 comments") and `renderActorNames` ("Alex, Sam and 3 others"). Both built their English by hand, from a `{ one, many }` noun table and literal `", "` / `" and "`.
+
+That is wrong for most of the 24 locales this renders in. Polish has three plural categories and Arabic six, so "one or not one" cannot pick the right noun, and the list separator and conjunction are not English's everywhere.
+
+### Added
+- `src/utils/intlText.ts`: `pluralCategory`, `formatCount`, `joinList` and `listSeparators`, over `Intl.PluralRules`, `Intl.NumberFormat` and `Intl.ListFormat`. Every one degrades to the old English behaviour if Intl throws, rather than throwing inside a render.
+- `locale` prop on `NotificationsView` and `NotificationRow`, threaded to both helpers.
+- Label keys for the assembled surfaces, keyed by plural CATEGORY rather than one/many: `group_<kind>_<category>`, `actors_others_<category>`, plus `actors_someone` and `group_countedNoun`.
+- `listSeparators` exists because the actor list is NODES (each name carries its own verified badge) and so cannot be handed to `ListFormat.format()`. It asks the locale for the literal pieces it puts between items and hands them back to be interleaved.
+
+### Changed
+- `formatActorNames` and `formatGroupSummary` take an options object; `renderActorNames` still accepts its old positional `maxNames` number, so existing callers are untouched.
+- **English punctuation shifts for `en`.** `Intl.ListFormat` gives `en` (like `en-US`) the Oxford comma: "5 reactions, 2 comments, and 1 mention". The old hand-rolled form was the en-GB one, without it. A host that writes British English should pass `en-GB`, which reproduces the previous output exactly.
+
+### Fixed
+- A test named "singularizes 'other' for exactly 1 other" that never did: it passed `maxNames=2` with four actors, so `remaining` was 2. The singular is in fact unreachable by construction, because `actors.length === maxNames + 1` takes the name-everyone branch first. Now named and documented for what it actually asserts.
+
 ## 1.7.0 — 2026-10-29
 
 Every row in this package was hardcoded English. The community app ships in 24 locales and its notification SETTINGS screen is fully translated, so a Portuguese member could read a translated row name in settings, open the bell, and be told "was added to" in English. The package was the one place in that loop with no way in for copy.

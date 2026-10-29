@@ -30,6 +30,11 @@ interface NotificationRowProps {
    * none, the rows read exactly as they do today. See NotificationLabels.
    */
   labels?: NotificationLabels;
+  /**
+   * BCP-47 tag, used for plural agreement and list punctuation. Omitted,
+   * Intl falls back to the runtime default.
+   */
+  locale?: string;
 }
 
 /** Unread if the record's status says so, else fall back to readAt absence. */
@@ -48,7 +53,7 @@ function isRecordUnread(n: Notification): boolean {
  * Keep the type coverage in sync with services/core/prisma/schema.prisma
  * `NotificationType` enum + packages/widgets vanilla-JS formatter.
  */
-export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread, labels }: NotificationRowProps) {
+export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread, labels, locale }: NotificationRowProps) {
   const [expanded, setExpanded] = React.useState(false);
   const isGroup = "isGroup" in item && item.isGroup === true;
   const group = isGroup ? (item as NotificationGroup) : null;
@@ -217,7 +222,7 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
     ? {
         messageNode: (
           <>
-            <span className="font-medium">{formatGroupSummary(kindCounts)}</span>
+            <span className="font-medium">{formatGroupSummary(kindCounts, { locale, labels })}</span>
             <span style={{ opacity: 0.6 }}> on your post</span>
           </>
         ),
@@ -231,6 +236,7 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
         payload,
         groupActors,
         labels,
+        locale,
       });
   const { messageNode, snippet, overlay, overlayTone, iconOnly, isClickable } = built;
 
@@ -456,6 +462,7 @@ interface BuildMessageInput {
   payload: Record<string, unknown>;
   groupActors: NotificationActorView[] | null;
   labels?: NotificationLabels;
+  locale?: string;
 }
 
 /**
@@ -487,21 +494,22 @@ interface BuildMessageInput {
  * a known amount and one without are different sentences, not one sentence
  * with an empty slot, and translators need both.
  *
- * ── Still English, and known to be ──────────────────────────────────────────
+ * ── The aggregate surfaces ──────────────────────────────────────────────────
  *
- * Two aggregate surfaces are NOT covered here, deliberately rather than by
- * oversight:
+ * Two places do not take a whole sentence, because they ASSEMBLE one:
+ * `formatGroupSummary` ("3 reactions and 2 comments") and `renderActorNames`
+ * ("Alex, Sam and 3 others"). Both take their nouns from this same map, but
+ * keyed by PLURAL CATEGORY rather than by a template:
  *
- *   - `formatGroupSummary` in utils/groupNotifications ("3 reactions and 2
- *     comments on your post"), whose nouns live in a one/many table.
- *   - `renderActorNames` in NotificationAvatarBadge (the " and " joiner, the
- *     "N others" tail, and the "Someone" fallback).
+ *   group_reaction_one / group_reaction_other / group_reaction_few / …
+ *   actors_others_one  / actors_others_other  / …
+ *   actors_someone, group_countedNoun
  *
- * Both need real plural rules, and a one/many split is already wrong for any
- * language with more than two forms. Wiring them through this template system
- * would hardcode the English plural model into two more places and make the
- * eventual correct fix harder. They want Intl.PluralRules and a list
- * formatter, which is its own change.
+ * The category comes from Intl.PluralRules for the locale, and the list
+ * punctuation from Intl.ListFormat, so a language with three or six plural
+ * forms gets correct agreement instead of the nearest English approximation.
+ * A host that supplies none of these keeps the English built into
+ * utils/intlText.
  */
 export type NotificationLabels = Record<string, string>;
 
@@ -553,6 +561,7 @@ function buildMessage({
   payload,
   groupActors,
   labels,
+  locale,
 }: BuildMessageInput): BuiltMessage {
   const muted = (text: string) => <span style={{ opacity: 0.6 }}>{text}</span>;
   const bold = (text: string) => <span className="font-medium">{text}</span>;
@@ -631,7 +640,7 @@ function buildMessage({
     case "POST_REACTED":
       return {
         messageNode: line("POST_REACTED", "{actor} reacted to your post", {
-          actor: groupActors ? renderActorNames(groupActors) : actorSlot,
+          actor: groupActors ? renderActorNames(groupActors, { locale, labels }) : actorSlot,
         }),
         snippet: maybe(payload.postSnippet),
         overlay: <Glyph type="heart" />,
@@ -642,7 +651,7 @@ function buildMessage({
     case "POST_COMMENTED":
       return {
         messageNode: line("POST_COMMENTED", "{actor} commented on your post", {
-          actor: groupActors ? renderActorNames(groupActors) : actorSlot,
+          actor: groupActors ? renderActorNames(groupActors, { locale, labels }) : actorSlot,
         }),
         snippet: maybe(payload.commentSnippet),
         isClickable: true,
@@ -651,7 +660,7 @@ function buildMessage({
     case "POST_COMMENT_REPLY":
       return {
         messageNode: line("POST_COMMENT_REPLY", "{actor} replied to your comment", {
-          actor: groupActors ? renderActorNames(groupActors) : actorSlot,
+          actor: groupActors ? renderActorNames(groupActors, { locale, labels }) : actorSlot,
         }),
         snippet: maybe(payload.replySnippet),
         isClickable: true,
@@ -660,7 +669,7 @@ function buildMessage({
     case "POST_COMMENT_LIKED":
       return {
         messageNode: line("POST_COMMENT_LIKED", "{actor} liked your comment", {
-          actor: groupActors ? renderActorNames(groupActors) : actorSlot,
+          actor: groupActors ? renderActorNames(groupActors, { locale, labels }) : actorSlot,
         }),
         snippet: maybe(payload.commentSnippet),
         overlay: <Glyph type="heart" />,
