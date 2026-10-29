@@ -237,6 +237,7 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
         groupActors,
         labels,
         locale,
+        renderAvatar,
       });
   const { messageNode, snippet, overlay, overlayTone, iconOnly, isClickable } = built;
 
@@ -260,7 +261,51 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
     </button>
   ) : null;
 
-  const trailing = muteButton || isUnread ? (
+  /*
+   * The artifact thumbnail: what this notification is ABOUT.
+   *
+   * ── Why a second image ─────────────────────────────────────────────────
+   *
+   * The leading tile answers "who", the trailing one answers "which thing".
+   * They are genuinely different questions, which is why Instagram carries
+   * both, and the bell needs it more than a social feed does: a member with
+   * four listings reading "Your product The Positioning Workbook was
+   * approved" has to parse a name to work out which of their things moved.
+   * A cover answers it before the sentence is read.
+   *
+   * Almost every commerce row is about an artifact -- a product, an event, a
+   * course -- so this covers sales, refunds, approvals, reviews, downloads
+   * and the whole listing family from one field.
+   *
+   * ── Optional, and quiet when absent ────────────────────────────────────
+   *
+   * `itemImageUrl` is resolved at read time by the backend rather than
+   * stored in the payload, because an image URL written months ago is wrong
+   * the moment somebody changes their banner. A row without one renders
+   * exactly as it did before: no placeholder, no gap, no reserved space.
+   */
+  const itemImageUrl = (payload.itemImageUrl as string) || (payload.productImageUrl as string) || null;
+  const thumbnail = itemImageUrl ? (
+    <img
+      src={itemImageUrl}
+      alt=""
+      aria-hidden="true"
+      className="shrink-0 object-cover"
+      style={{
+        width: 40,
+        height: 40,
+        /* Squircle, not a circle: a circle reads as a person, and the whole
+           point of this image is that it is NOT the person -- the round
+           avatar is already doing that job 300px to the left. */
+        borderRadius: 8,
+        background: "rgba(128,128,128,0.10)",
+      }}
+      /* A dead banner URL must not leave a broken-image glyph in the bell. */
+      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+    />
+  ) : null;
+
+  const trailing = muteButton || isUnread || thumbnail ? (
     <div className="flex items-center gap-2 shrink-0">
       {muteButton}
       {isUnread && (
@@ -271,6 +316,7 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
           style={{ width: 8, height: 8, background: "rgba(128,128,128,0.9)" }}
         />
       )}
+      {thumbnail}
     </div>
   ) : null;
 
@@ -486,6 +532,8 @@ interface BuildMessageInput {
   groupActors: NotificationActorView[] | null;
   labels?: NotificationLabels;
   locale?: string;
+  /** Threaded through so a composite tile uses the host's own avatar. */
+  renderAvatar?: (props: { name: string; imageUrl: string | null; size: number }) => React.ReactNode;
 }
 
 /**
@@ -585,6 +633,7 @@ function buildMessage({
   groupActors,
   labels,
   locale,
+  renderAvatar,
 }: BuildMessageInput): BuiltMessage {
   const muted = (text: string) => <span style={{ opacity: 0.6 }}>{text}</span>;
   const bold = (text: string) => <span className="font-medium">{text}</span>;
@@ -747,7 +796,16 @@ function buildMessage({
           requester: requesterName,
           item: itemName,
         }),
-        iconOnly: <SolidIcon type="package" tone="blue" />,
+        iconOnly: (
+          <ActorWithBadge
+            name={requesterName}
+            imageUrl={actorImageFor(payload, "requester")}
+            glyphType="package"
+            tone="blue"
+            fallback={<SolidIcon type="package" tone="blue" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
         isClickable: true,
       };
     }
@@ -835,7 +893,16 @@ function buildMessage({
                 product: productName,
               }),
         snippet,
-        iconOnly: <SolidIcon type="star" tone="yellow" />,
+        iconOnly: (
+          <ActorWithBadge
+            name={reviewerName}
+            imageUrl={actorImageFor(payload, "reviewer")}
+            glyphType="star"
+            tone="yellow"
+            fallback={<SolidIcon type="star" tone="yellow" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
         isClickable: false,
       };
     }
@@ -854,7 +921,99 @@ function buildMessage({
            and the platform has already told the buyer to ask them. */
         snippet: labels?.DOWNLOAD_LIMIT_REACHED_snippet
           ?? "They cannot download it again until you raise the limit.",
-        iconOnly: <SolidIcon type="ban" tone="yellow" />,
+        iconOnly: (
+          <ActorWithBadge
+            name={buyerName}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType="ban"
+            tone="yellow"
+            fallback={<SolidIcon type="ban" tone="yellow" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
+    /* ── Approvals, both sides (feat/approval-notifications) ─────────────
+     *
+     * Every approval flow on the platform used to notify one side. The
+     * decider was never told a request existed -- the only seller-facing
+     * message came from a cron sweep days later, so their first word of a
+     * pending application was a reminder about something nobody had
+     * mentioned. The requester was told the decision and never told the
+     * request had arrived.
+     *
+     * Products and events share these three. `itemType` says which, so the
+     * sentence reads naturally either way without four near-identical rows.
+     */
+    case "APPROVAL_REQUESTED": {
+      const requester = (payload.requesterName as string) || "Someone";
+      const itemName = (payload.itemName as string) || "your listing";
+      const itemType = (payload.itemType as string) || "listing";
+      return {
+        messageNode: line(
+          "APPROVAL_REQUESTED",
+          "{requester} asked to join {item}",
+          { requester, item: itemName },
+        ),
+        /* Yellow, not blue: this row is not news, it is a job. Nothing
+           happens to the request until the reader does something, and at
+           fourteen days it cancels and charges them the processing fee. */
+        snippet: labels?.APPROVAL_REQUESTED_snippet ?? `Waiting on your answer · ${itemType}`,
+        iconOnly: (
+          <ActorWithBadge
+            name={requester}
+            imageUrl={actorImageFor(payload, "requester")}
+            glyphType="package"
+            tone="yellow"
+            fallback={<SolidIcon type="package" tone="yellow" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
+    case "APPROVAL_REQUEST_SENT": {
+      const itemName = (payload.itemName as string) || "your request";
+      return {
+        messageNode: line("APPROVAL_REQUEST_SENT", "Your request for {item} was sent", {
+          item: itemName,
+        }),
+        /* The receipt. Neutral on purpose -- nothing has happened yet, and
+           colouring a "we have it" row would spend attention the decision
+           row needs later. */
+        iconOnly: <SolidIcon type="check" tone="neutral" />,
+        isClickable: false,
+      };
+    }
+
+    case "APPROVAL_DECIDED": {
+      const itemName = (payload.itemName as string) || "your request";
+      const decision = (payload.decision as string) || "";
+      const approved = decision === "approve" || decision === "approved";
+      /*
+       * Rows written before this type existed carry only the pre-composed
+       * title and body the old APP_NOTIFICATION path sent. Falling back to
+       * them keeps a member's existing bell readable instead of blanking it
+       * the moment the sentence starts being composed here.
+       */
+      const legacyTitle = (payload.title as string) || "";
+      return {
+        messageNode: legacyTitle
+          ? line("APPROVAL_DECIDED_legacy", "{title}", { title: legacyTitle })
+          : approved
+            ? line("APPROVAL_DECIDED_approved", "Your request for {item} was approved", {
+                item: itemName,
+              })
+            : line("APPROVAL_DECIDED_declined", "Your request for {item} was declined", {
+                item: itemName,
+              }),
+        snippet: (payload.body as string) || undefined,
+        iconOnly: approved
+          ? <SolidIcon type="check" tone="green" />
+          : <SolidIcon type="x" tone="red" />,
         isClickable: false,
       };
     }
@@ -874,7 +1033,16 @@ function buildMessage({
               buyer: buyerName,
               product: productName,
             }),
-        iconOnly: <SolidIcon type="coin" tone="green" />,
+        iconOnly: (
+          <ActorWithBadge
+            name={buyerName}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType="coin"
+            tone="green"
+            fallback={<SolidIcon type="coin" tone="green" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
         isClickable: false,
       };
     }
@@ -928,7 +1096,16 @@ function buildMessage({
               buyer: buyerName,
               product: productName,
             }),
-        iconOnly: <SolidIcon type="arrow-left" tone="yellow" />,
+        iconOnly: (
+          <ActorWithBadge
+            name={buyerName}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType="arrow-left"
+            tone="yellow"
+            fallback={<SolidIcon type="arrow-left" tone="yellow" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
         isClickable: false,
       };
     }
@@ -1031,7 +1208,16 @@ function buildMessage({
           owner: ownerName,
           item: itemName,
         }),
-        iconOnly: <SolidIcon type="arrow-left" tone="yellow" />,
+        iconOnly: (
+          <ActorWithBadge
+            name={ownerName}
+            imageUrl={actorImageFor(payload, "owner")}
+            glyphType="arrow-left"
+            tone="yellow"
+            fallback={<SolidIcon type="arrow-left" tone="yellow" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
         isClickable: false,
       };
     }
@@ -1226,6 +1412,110 @@ function Glyph({ type }: { type: "heart" | "check" | "people" }) {
   );
 }
 
+/**
+ * A person with a small glyph badge over them.
+ *
+ * ── Why these rows get a person at all ─────────────────────────────────────
+ *
+ * Twelve rows used `iconOnly`, which replaces the avatar entirely with a grey
+ * glyph tile. Six of those name a person in their own sentence, so the bell
+ * read "Ana Ribeiro requested to list Founder Breakfast" beside a tile with no
+ * Ana in it. The composite is not new -- it is what the reaction rows have
+ * always used -- it was simply never applied to the commerce and listing
+ * family.
+ *
+ * Falls back to the plain glyph tile when there is no avatar to draw, which is
+ * every row written before the backend started resolving one. So this degrades
+ * to exactly today's appearance rather than to a blank circle.
+ */
+type GlyphType = "shield" | "star" | "package" | "ban" | "arrow-left" | "coin" | "x" | "check";
+
+/** The glyph shapes, shared by the full tile and the small overlay badge. */
+function glyphPath(type: GlyphType): ReactNode {
+  switch (type) {
+    case "shield":
+      return <path d="M12 2L4 5v6c0 5 3 9 8 11 5-2 8-6 8-11V5l-8-3z" />;
+    case "star":
+      return <path d="M12 2l3 6.5L22 10l-5.5 4.5L18 22l-6-3.5L6 22l1.5-7.5L2 10l7-1.5z" />;
+    case "package":
+      return <path d="M3 7l9-4 9 4-9 4-9-4zm0 5l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
+    case "ban":
+      return <><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M5 5l14 14" stroke="currentColor" strokeWidth="2" /></>;
+    case "arrow-left":
+      return <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
+    case "coin":
+      return <><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="2" /></>;
+    case "x":
+      return <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
+    case "check":
+      return <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
+  }
+}
+
+function ActorWithBadge({
+  name,
+  imageUrl,
+  glyphType,
+  tone,
+  fallback,
+  renderAvatar,
+}: {
+  name: string;
+  imageUrl: string | null;
+  glyphType: GlyphType;
+  tone: "red" | "green" | "yellow" | "blue" | "neutral";
+  /** Drawn instead when there is no avatar: today's plain glyph tile. */
+  fallback: ReactNode;
+  renderAvatar?: (props: { name: string; imageUrl: string | null; size: number }) => React.ReactNode;
+}): ReactNode {
+  if (!imageUrl) return fallback;
+  const palette = TONES[tone] ?? TONES.neutral;
+  return (
+    <div className="relative shrink-0" style={{ width: 40, height: 40 }}>
+      <Avatar name={name} imageUrl={imageUrl} size={40} renderAvatar={renderAvatar} />
+      <div
+        className="absolute flex items-center justify-center rounded-full"
+        style={{
+          right: -2,
+          bottom: -2,
+          width: 19,
+          height: 19,
+          background: palette.bg === TONES.neutral.bg ? "var(--bg-color, #fff)" : palette.bg,
+          /* A ring in the surface colour is what makes the overlap read as
+             depth rather than as two shapes that happen to touch. */
+          boxShadow: "0 0 0 2px var(--bg-color, #fff)",
+          color: palette.fg,
+        }}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          {glyphPath(glyphType)}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The avatar for the person a row's sentence names.
+ *
+ * Resolved at READ time by the backend and written onto the payload as
+ * `<role>AvatarUrl`, with a couple of older shapes accepted because some
+ * payloads already carried a nested user object before any of this. A stored
+ * URL would have been wrong the moment somebody changed their photo, and
+ * notifications sit in the bell for months.
+ *
+ * Returns null for every row written before that resolution existed, and the
+ * composite falls back to the plain glyph tile -- so old rows keep rendering
+ * exactly as they always did.
+ */
+function actorImageFor(payload: Record<string, unknown>, role: string): string | null {
+  const direct = payload[`${role}AvatarUrl`] ?? payload[`${role}Image`] ?? payload[`${role}ImageUrl`];
+  if (typeof direct === "string" && direct) return direct;
+  const nested = payload[role] as Record<string, unknown> | undefined;
+  const fromNested = nested?.avatarUrl ?? nested?.profileImage;
+  return typeof fromNested === "string" && fromNested ? fromNested : null;
+}
+
 const INHERIT = "var(--text-color, currentColor)";
 
 /**
@@ -1251,7 +1541,7 @@ function SolidIcon({
   type,
   tone = "neutral",
 }: {
-  type: "shield" | "star" | "package" | "ban" | "arrow-left" | "coin" | "x" | "check";
+  type: GlyphType;
   /*
    * Tone is honoured again.
    *
@@ -1273,26 +1563,7 @@ function SolidIcon({
    */
   tone?: "red" | "green" | "yellow" | "blue" | "neutral";
 }) {
-  const path = (() => {
-    switch (type) {
-      case "shield":
-        return <path d="M12 2L4 5v6c0 5 3 9 8 11 5-2 8-6 8-11V5l-8-3z" />;
-      case "star":
-        return <path d="M12 2l3 6.5L22 10l-5.5 4.5L18 22l-6-3.5L6 22l1.5-7.5L2 10l7-1.5z" />;
-      case "package":
-        return <path d="M3 7l9-4 9 4-9 4-9-4zm0 5l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
-      case "ban":
-        return <><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M5 5l14 14" stroke="currentColor" strokeWidth="2" /></>;
-      case "arrow-left":
-        return <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
-      case "coin":
-        return <><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="2" /></>;
-      case "x":
-        return <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
-      case "check":
-        return <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
-    }
-  })();
+  const path = glyphPath(type);
 
   const palette = TONES[tone] ?? TONES.neutral;
   return (
