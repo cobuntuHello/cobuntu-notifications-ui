@@ -55,6 +55,21 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
     case "SALE_REFUNDED":
       return "/my-ledger";
 
+    /*
+     * A referral row lands on the REFERRER's own tracker, not on the artifact.
+     * They were told they earned something; the question that follows is "how
+     * much, and when do I get it", which only that page answers. T-303.
+     */
+    case "REFERRAL_LINK_ASSIGNED":
+    case "REFERRAL_LINK_ACTIVATED":
+    case "REFERRAL_SALE":
+      return "/my-referrals";
+
+    // The OWNER's copy goes to the item's own money view instead: they are
+    // being told about a sale of their thing, not about somebody's commission.
+    case "REFERRAL_SALE_OWNER":
+      return "/my-ledger";
+
     // The screen where the bank details are fixed. For PAYOUT_FAILED this is
     // the whole reason the notification exists.
     case "PAYOUT_CONFIRMED":

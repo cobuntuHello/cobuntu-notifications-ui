@@ -1328,6 +1328,72 @@ function buildMessage({
       };
     }
 
+    /*
+     * ── Referral links on an artifact (T-303) ────────────────────────────
+     *
+     * Four rows, written from the reader's side. Two go to the REFERRER and
+     * two to the artifact's owner, and the distinction matters: the same sale
+     * produces one of each, so they must not read alike or an owner's bell and
+     * a referrer's bell would be indistinguishable.
+     *
+     * A referrer never sees the BUYER. Who bought is the seller's business,
+     * and the referrer is owed their commission, not the customer list.
+     */
+    case "REFERRAL_LINK_ASSIGNED": {
+      const itemName = (payload.itemName as string) || "an item";
+      const communityName = payload.communityName as string | undefined;
+      return {
+        messageNode: communityName
+          ? line("REFERRAL_LINK_ASSIGNED_withCommunity",
+                 "You can now earn by promoting {item} in {community}",
+                 { item: itemName, community: communityName })
+          : line("REFERRAL_LINK_ASSIGNED", "You can now earn by promoting {item}",
+                 { item: itemName }),
+        isClickable: true,
+      };
+    }
+
+    case "REFERRAL_LINK_ACTIVATED": {
+      /*
+       * The moment the link becomes real. It exists because the invitation is
+       * created with NO CODE -- nothing to share until a payout account is
+       * connected -- so "your link is ready" is genuinely new information and
+       * not a restatement of the invite.
+       */
+      const itemName = (payload.itemName as string) || "an item";
+      return {
+        messageNode: line("REFERRAL_LINK_ACTIVATED",
+                          "Your referral link for {item} is ready to share",
+                          { item: itemName }),
+        isClickable: true,
+      };
+    }
+
+    case "REFERRAL_SALE": {
+      // To the REFERRER: what they earned. Never who bought.
+      const itemName = (payload.itemName as string) || "an item";
+      const amount = payload.commissionAmount as string | undefined;
+      return {
+        messageNode: amount
+          ? line("REFERRAL_SALE_withAmount", "Your link sold {item}. You earned {amount}.",
+                 { item: itemName, amount })
+          : line("REFERRAL_SALE", "Your link sold {item}", { item: itemName }),
+        isClickable: true,
+      };
+    }
+
+    case "REFERRAL_SALE_OWNER": {
+      // To the OWNER: who sold it, because that is the thing they cannot see
+      // anywhere else on a sale that came through somebody else's link.
+      const itemName = (payload.itemName as string) || "your item";
+      const referrerName = (payload.referrerName as string) || "Someone";
+      return {
+        messageNode: line("REFERRAL_SALE_OWNER", "{referrer} sold {item} through their referral link",
+                          { referrer: referrerName, item: itemName }),
+        isClickable: true,
+      };
+    }
+
     default:
       // Unknown type — render a generic activity row rather than dropping
       // the record silently. Mirrors the legacy renderer's fall-through.
