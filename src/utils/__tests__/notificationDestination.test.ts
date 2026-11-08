@@ -91,3 +91,15 @@ describe("coverage", () => {
     }
   });
 });
+
+describe("event reviews", () => {
+  it("a host lands on the event's Reviews tab", () => {
+    expect(d("EVENT_REVIEW_RECEIVED", { eventSlug: "wild-coast", eventId: "e1" })).toBe("/events/wild-coast/manage?view=reviews");
+  });
+  it("a reviewer lands on the event page's reviews", () => {
+    expect(d("EVENT_REVIEW_REPLIED", { eventSlug: "wild coast" })).toBe("/events/wild%20coast#reviews");
+  });
+  it("no event, nowhere to go", () => {
+    expect(d("EVENT_REVIEW_RECEIVED", {})).toBeNull();
+  });
+});

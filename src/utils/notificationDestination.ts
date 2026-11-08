@@ -81,6 +81,18 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
     case "REFUND_COMPLETED":
       return "/my-orders";
 
+    // ── Event reviews ─────────────────────────────────────────────────────
+    // A host lands on the event's Reviews tab, where they can reply or hide;
+    // a reviewer lands on the reviews section of the event page.
+    case "EVENT_REVIEW_RECEIVED": {
+      const slug = str(payload.eventSlug) || str(payload.eventId);
+      return slug ? `/events/${encodeURIComponent(slug)}/manage?view=reviews` : null;
+    }
+    case "EVENT_REVIEW_REPLIED": {
+      const slug = str(payload.eventSlug) || str(payload.eventId);
+      return slug ? `/events/${encodeURIComponent(slug)}#reviews` : null;
+    }
+
     // ── Land on the artifact ──────────────────────────────────────────────
     case "REVIEW_RECEIVED":
     case "LISTING_APPROVED":

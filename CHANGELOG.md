@@ -4,6 +4,11 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.14.0 — 2026-11-08
+
+### Added
+- **Event review rows.** `EVENT_REVIEW_RECEIVED` ("{reviewer} reviewed {event}, {rating}/5", to every host; "Someone" when the attendee reviewed anonymously) lands on the event's Reviews tab (`/events/<slug>/manage?view=reviews`). `EVENT_REVIEW_REPLIED` ("The host replied to your review of {event}") lands on the event page's reviews (`/events/<slug>#reviews`). Labels overridable like every row.
+
 ## 1.11.0 — 2026-10-29
 
 ### Added

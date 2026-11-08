@@ -947,6 +947,53 @@ function buildMessage({
       };
     }
 
+    /* ── Event reviews (backend docs/features/event-reviews.md) ───────────
+     *
+     * RECEIVED goes to every host of the event. When the attendee chose to
+     * publish anonymously the backend sends no reviewerName, and the row says
+     * "Someone" rather than undoing that choice from the bell.
+     * REPLIED goes to the reviewer when a host answers them publicly.
+     */
+    case "EVENT_REVIEW_RECEIVED": {
+      const eventName = (payload.eventName as string) || "your event";
+      const reviewerName = (payload.reviewerName as string) || "Someone";
+      const rating = typeof payload.rating === "number" ? payload.rating : null;
+      const snippet = (payload.snippet as string) || undefined;
+      return {
+        messageNode:
+          rating !== null
+            ? line("EVENT_REVIEW_RECEIVED_rated", "{reviewer} reviewed {event}, {rating}/5", {
+                reviewer: reviewerName,
+                event: eventName,
+                rating: String(rating),
+              })
+            : line("EVENT_REVIEW_RECEIVED", "{reviewer} reviewed {event}", { reviewer: reviewerName, event: eventName }),
+        snippet,
+        iconOnly: (
+          <ActorWithBadge
+            name={reviewerName}
+            imageUrl={actorImageFor(payload, "reviewer")}
+            glyphType="star"
+            tone="yellow"
+            fallback={<SolidIcon type="star" tone="yellow" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
+    case "EVENT_REVIEW_REPLIED": {
+      const eventName = (payload.eventName as string) || "an event";
+      const snippet = (payload.snippet as string) || undefined;
+      return {
+        messageNode: line("EVENT_REVIEW_REPLIED", "The host replied to your review of {event}", { event: eventName }),
+        snippet,
+        iconOnly: <SolidIcon type="star" tone="yellow" />,
+        isClickable: false,
+      };
+    }
+
     case "DOWNLOAD_LIMIT_REACHED": {
       const productName = (payload.productName as string) || "your product";
       const fileName = (payload.fileName as string) || "a file";
