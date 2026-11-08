@@ -285,6 +285,20 @@ describe("NotificationRow", () => {
     expect(screen.getByText("Desconversados")).toBeInTheDocument();
   });
 
+  it("renders MEMBERSHIP_CONFIRMED's avatar as the COMMUNITY's own icon, not a generic/default avatar", () => {
+    const item = makeNotif({
+      type: "MEMBERSHIP_CONFIRMED",
+      payload: {
+        fromCommunity: { name: "Finance Social Club", communityTag: "financesocialclub", iconUrl: "https://cdn.test/fsc-icon.png" },
+      },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    const img = container.querySelector("img") as HTMLImageElement | null;
+    expect(img).not.toBeNull();
+    expect(img?.src).toContain("fsc-icon.png");
+  });
+
+
   it("renders POST_REMOVED_FROM_COMMUNITY with a red shield icon-only tile (no actor avatar)", () => {
     const item = makeNotif({
       type: "POST_REMOVED_FROM_COMMUNITY",

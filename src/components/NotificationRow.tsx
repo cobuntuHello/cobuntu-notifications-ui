@@ -111,8 +111,7 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
           isVerified: (u?.isVerified as boolean) ?? fallbackVerified,
         };
       }
-      case "MEMBERSHIP_REQUEST":
-      case "MEMBERSHIP_CONFIRMED": {
+      case "MEMBERSHIP_REQUEST": {
         const u = (payload.byUser as Record<string, unknown> | undefined)
           || (payload.applicant as Record<string, unknown> | undefined);
         return {
@@ -120,6 +119,22 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
           usertag: (u?.usertag as string) || fallbackUsertag,
           imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || fallbackImage,
           isVerified: (u?.isVerified as boolean) ?? fallbackVerified,
+        };
+      }
+      case "MEMBERSHIP_CONFIRMED": {
+        // No person to show here — it's the viewer's OWN membership, not
+        // someone else's action. Unlike MEMBERSHIP_REQUEST (an applicant a
+        // leader is reviewing), there is no byUser/applicant in this
+        // payload, so this used to always fall through to the generic
+        // default avatar. Show the community's own icon instead.
+        const from = (payload.fromCommunity as Record<string, unknown> | undefined)
+          || (payload.community as Record<string, unknown> | undefined);
+        const communityName = (from?.name as string) || (payload.communityName as string) || fallbackName;
+        return {
+          name: communityName,
+          usertag: null,
+          imageUrl: (from?.iconUrl as string) || (payload.communityIconUrl as string) || null,
+          isVerified: false,
         };
       }
       case "POST_REACTED":
