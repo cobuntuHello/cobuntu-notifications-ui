@@ -4,6 +4,14 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.15.0 — 2026-11-09
+
+### Added
+- **Product and course review replies.** `REVIEW_REPLIED` ("The seller replied to your review of {product}") lands on the item page's reviews: `/learning/<id>#reviews` for a course, `/marketplace/<sku>#reviews` otherwise.
+
+### Changed
+- **`REVIEW_RECEIVED` now has somewhere to go.** With the unified-reviews payload (`productId`, `productSku`, `productType`) it lands on the item's Reviews tab (`/marketplace/<sku>/manage?view=reviews`, or `/learning/<id>/manage?view=reviews` for a course). Older payloads keep the artifact fallback.
+
 ## 1.14.0 — 2026-11-08
 
 ### Added
