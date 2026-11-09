@@ -103,3 +103,17 @@ describe("event reviews", () => {
     expect(d("EVENT_REVIEW_RECEIVED", {})).toBeNull();
   });
 });
+
+describe("product and course reviews (unified reviews)", () => {
+  it("a seller lands on the item's Reviews tab: marketplace for a product, learning for a course", () => {
+    expect(d("REVIEW_RECEIVED", { productId: "p1", productSku: "sketch-kit", productType: "DIGITAL" })).toBe("/marketplace/sketch-kit/manage?view=reviews");
+    expect(d("REVIEW_RECEIVED", { productId: "c 1", productSku: "x", productType: "COURSE" })).toBe("/learning/c%201/manage?view=reviews");
+  });
+  it("a reviewer lands on the item page's reviews", () => {
+    expect(d("REVIEW_REPLIED", { productId: "p1", productSku: "sketch-kit", productType: "PHYSICAL" })).toBe("/marketplace/sketch-kit#reviews");
+    expect(d("REVIEW_REPLIED", { productId: "c1", productType: "COURSE" })).toBe("/learning/c1#reviews");
+  });
+  it("no product, nowhere to go", () => {
+    expect(d("REVIEW_REPLIED", {})).toBeNull();
+  });
+});

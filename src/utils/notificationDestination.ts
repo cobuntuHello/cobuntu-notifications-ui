@@ -48,6 +48,16 @@ function artifactPath(payload: Record<string, unknown>): string | null {
     : `/marketplace/${encodeURIComponent(handle)}`;
 }
 
+/** The public page of a reviewed product or course, from a review payload. */
+function reviewedItemPath(payload: Record<string, unknown>): string | null {
+  if (str(payload.productType) === "COURSE") {
+    const id = str(payload.productId);
+    return id ? `/learning/${encodeURIComponent(id)}` : null;
+  }
+  const sku = str(payload.productSku) || str(payload.productId);
+  return sku ? `/marketplace/${encodeURIComponent(sku)}` : null;
+}
+
 export function destinationFor({ type, payload }: DestinationInput): string | null {
   switch (type) {
     // ── The money is the point, so the ledger is the destination ──────────
@@ -93,8 +103,20 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
       return slug ? `/events/${encodeURIComponent(slug)}#reviews` : null;
     }
 
+    // ── Product and course reviews (unified reviews) ─────────────────────
+    // A seller lands on the item's Reviews tab, where they can reply or hide
+    // a comment; a reviewer lands on the reviews section of the item's page.
+    // A course lives under /learning/<id>, anything else under /marketplace/<sku>.
+    case "REVIEW_RECEIVED": {
+      const base = reviewedItemPath(payload);
+      return base ? `${base}/manage?view=reviews` : artifactPath(payload);
+    }
+    case "REVIEW_REPLIED": {
+      const base = reviewedItemPath(payload);
+      return base ? `${base}#reviews` : null;
+    }
+
     // ── Land on the artifact ──────────────────────────────────────────────
-    case "REVIEW_RECEIVED":
     case "LISTING_APPROVED":
     case "LISTING_REQUESTED":
     case "LISTING_WITHDRAWN":

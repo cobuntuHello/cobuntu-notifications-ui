@@ -117,6 +117,17 @@ describe("NotificationRow — reviews and downloads", () => {
     expect(container.textContent).toContain("0/5");
   });
 
+  it("tells a buyer the seller replied to their review, naming the item", () => {
+    const item = makeNotif({
+      type: "REVIEW_REPLIED",
+      payload: { productName: "Field sketching", productType: "COURSE", snippet: "Thank you, Stella!" },
+    });
+    const { container } = render(<NotificationRow item={item} adapter={{}} now={now} />);
+    expect(screen.getByText("Field sketching")).toBeInTheDocument();
+    expect(container.textContent).toMatch(/seller replied to your review/i);
+    expect(container.textContent).toContain("Thank you, Stella!");
+  });
+
   it("tells the seller what a download lockout means for them", () => {
     const item = makeNotif({
       type: "DOWNLOAD_LIMIT_REACHED",
@@ -129,7 +140,7 @@ describe("NotificationRow — reviews and downloads", () => {
   });
 
   it("never falls back to the generic row", () => {
-    for (const type of ["REVIEW_RECEIVED", "DOWNLOAD_LIMIT_REACHED"]) {
+    for (const type of ["REVIEW_RECEIVED", "REVIEW_REPLIED", "DOWNLOAD_LIMIT_REACHED"]) {
       const { container, unmount } = render(
         <NotificationRow item={makeNotif({ type, payload: {} })} adapter={{}} now={now} />,
       );

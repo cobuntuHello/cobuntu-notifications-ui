@@ -994,6 +994,22 @@ function buildMessage({
       };
     }
 
+    /* ── Product and course reviews: the reviewer side (unified reviews) ───
+     *
+     * The seller replied publicly to your review of a product or a course,
+     * the same row an attendee gets for an event reply.
+     */
+    case "REVIEW_REPLIED": {
+      const productName = (payload.productName as string) || "your purchase";
+      const snippet = (payload.snippet as string) || undefined;
+      return {
+        messageNode: line("REVIEW_REPLIED", "The seller replied to your review of {product}", { product: productName }),
+        snippet,
+        iconOnly: <SolidIcon type="star" tone="yellow" />,
+        isClickable: false,
+      };
+    }
+
     case "DOWNLOAD_LIMIT_REACHED": {
       const productName = (payload.productName as string) || "your product";
       const fileName = (payload.fileName as string) || "a file";
