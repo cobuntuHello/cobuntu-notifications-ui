@@ -86,6 +86,13 @@ export interface NotificationsAdapter {
   onClose?: () => void;
   onAcceptFriendRequest?: (notification: Notification) => Promise<void>;
   onRejectFriendRequest?: (notification: Notification) => Promise<void>;
+  /**
+   * Inline Accept/Decline on a MEMBERSHIP_REQUEST from someone with an
+   * account. `payload.requestId` and `payload.communityTag` identify it. Both
+   * must be provided for the buttons to show.
+   */
+  onAcceptMembershipRequest?: (notification: Notification) => Promise<void>;
+  onRejectMembershipRequest?: (notification: Notification) => Promise<void>;
   onRemoveFriend?: (notification: Notification) => Promise<void>;
 }
 

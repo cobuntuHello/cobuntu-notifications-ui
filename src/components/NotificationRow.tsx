@@ -112,10 +112,22 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
         };
       }
       case "MEMBERSHIP_REQUEST": {
-        const u = (payload.byUser as Record<string, unknown> | undefined)
-          || (payload.applicant as Record<string, unknown> | undefined);
+        // `applicant` is what the backend writes, with a name even when the
+        // person has no account (a form or landing-page request).
+        const u = (payload.applicant as Record<string, unknown> | undefined)
+          || (payload.fromUser as Record<string, unknown> | undefined)
+          || (payload.byUser as Record<string, unknown> | undefined);
         return {
           name: (u?.name as string) || fallbackName,
+          usertag: (u?.usertag as string) || fallbackUsertag,
+          imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || fallbackImage,
+          isVerified: (u?.isVerified as boolean) ?? fallbackVerified,
+        };
+      }
+      case "MEMBER_JOINED": {
+        const u = payload.fromUser as Record<string, unknown> | undefined;
+        return {
+          name: (u?.name as string) || (u?.usertag as string) || fallbackName,
           usertag: (u?.usertag as string) || fallbackUsertag,
           imageUrl: (u?.avatarUrl as string) || (u?.profileImage as string) || fallbackImage,
           isVerified: (u?.isVerified as boolean) ?? fallbackVerified,
@@ -240,6 +252,12 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
       adapter.onProfileClick(actor.usertag);
       return;
     }
+    // A request from someone with no account has no profile: its decision
+    // lives on the community's members page.
+    if (n.type === "MEMBERSHIP_REQUEST" && community.communityTag && adapter.onMembersListClick) {
+      adapter.onMembersListClick(community.communityTag);
+      return;
+    }
     if (community.communityTag && adapter.onCommunityClick) {
       adapter.onCommunityClick(community.communityTag);
       return;
@@ -283,6 +301,13 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
 
   // ─── Friend-request rows get inline accept/reject actions ───────
   const isFriendRequestInbound = n.type === "FRIEND_REQUEST_INBOUND";
+  // So do membership requests from an account. One without an account (a
+  // form or landing-page request) opens the members page instead.
+  const applicantId = (payload.applicant as Record<string, unknown> | undefined)?.id
+    ?? (payload.fromUser as Record<string, unknown> | undefined)?.id;
+  const isDecidableMembershipRequest = n.type === "MEMBERSHIP_REQUEST"
+    && !!payload.requestId && !!applicantId
+    && !!adapter.onAcceptMembershipRequest && !!adapter.onRejectMembershipRequest;
 
   // ─── Mute affordance (UI + callback only, no network) ───────────
   const showMute = !!group && !!postId && !!onMuteThread;
@@ -389,6 +414,12 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
               notification={n}
               onAccept={adapter.onAcceptFriendRequest}
               onReject={adapter.onRejectFriendRequest}
+            />
+          ) : isDecidableMembershipRequest ? (
+            <FriendRequestActions
+              notification={n}
+              onAccept={adapter.onAcceptMembershipRequest}
+              onReject={adapter.onRejectMembershipRequest}
             />
           ) : null
         }
@@ -721,6 +752,19 @@ function buildMessage({
           ? line("MEMBERSHIP_CONFIRMED", "You joined {community}", { community: community.name })
           : line("MEMBERSHIP_CONFIRMED_noCommunity", "Your membership was confirmed"),
         overlay: <Glyph type="check" />,
+        overlayTone: "green",
+        isClickable: true,
+      };
+
+    case "MEMBER_JOINED":
+      return {
+        messageNode: community.name
+          ? line("MEMBER_JOINED", "{actor} joined {community}", {
+              actor: actorSlot,
+              community: community.name,
+            })
+          : line("MEMBER_JOINED_noCommunity", "{actor} joined", { actor: actorSlot }),
+        overlay: <Glyph type="people" />,
         overlayTone: "green",
         isClickable: true,
       };
@@ -1524,6 +1568,7 @@ function shouldRouteToProfile(type: string): boolean {
     || type === "FRIEND_REQUEST_ACCEPTED"
     || type === "FRIENDSHIP_CONFIRMED"
     || type === "MEMBERSHIP_REQUEST"
+    || type === "MEMBER_JOINED"
   );
 }
 
