@@ -672,3 +672,64 @@ describe("NotificationRow — host and seller activity", () => {
     expect(container.textContent).toMatch(/Ana terminou Launch Kit/);
   });
 });
+
+describe("NotificationRow — membership activity for admins (backend T-335)", () => {
+  const member = { fromUser: { id: "u1", usertag: "ana", name: "Ana" } };
+  it.each([
+    ["MEMBERSHIP_STARTED", { ...member, tierName: "Gold" }, /Ana joined on Gold/],
+    ["MEMBERSHIP_RENEWED", { ...member, tierName: "Gold" }, /Ana renewed Gold/],
+    ["MEMBERSHIP_TIER_CHANGED_ADMIN", { ...member, toTierName: "Silver" }, /Ana moved to Silver/],
+    ["MEMBERSHIP_ENDED", { ...member, activity: "cancelled" }, /Ana cancelled their membership/],
+    ["MEMBERSHIP_ENDED", { ...member, activity: "expired" }, /Ana's membership expired/],
+    ["MEMBERSHIP_PAYMENT_FAILED_ADMIN", member, /Ana's membership payment failed/],
+  ])("%s reads as the admin would say it", (type, payload, re) => {
+    const { container } = render(<NotificationRow item={makeNotif({ type, payload })} adapter={{}} now={now} />);
+    expect(container.textContent).toMatch(re);
+  });
+
+  it("opens the member's profile", () => {
+    const onProfileClick = vi.fn();
+    const { container } = render(
+      <NotificationRow item={makeNotif({ type: "MEMBERSHIP_PAYMENT_FAILED_ADMIN", payload: member })} adapter={{ onProfileClick }} now={now} />,
+    );
+    expect(clickRow(container)).toBe(true);
+    expect(onProfileClick).toHaveBeenCalledWith("ana");
+  });
+});
+
+describe("NotificationRow — milestones (backend T-336)", () => {
+  it.each([
+    [{ kind: "sold_out", itemName: "Hike" }, /Hike is sold out/],
+    [{ kind: "few_left", left: 3, itemName: "Hike" }, /Hike has 3 places left/],
+    [{ kind: "few_left", left: 1, itemName: "Hike" }, /Hike has 1 place left/],
+    [{ kind: "sales", count: 50, itemName: "Kit" }, /Kit reached 50 sales/],
+    [{ kind: "completions", count: 10, itemName: "Kit" }, /10 people completed Kit/],
+    [{ kind: "first_sale", itemName: "Kit" }, /You made your first sale: Kit/],
+  ])("%o", (payload, re) => {
+    const { container } = render(<NotificationRow item={makeNotif({ type: "MILESTONE_REACHED", payload })} adapter={{}} now={now} />);
+    expect(container.textContent).toMatch(re);
+    expect(container.textContent).not.toMatch(/!/);
+  });
+});
+
+describe("burst grouping of host activity (backend T-337)", () => {
+  const reg = (id: string, name: string | null, userId: string | null, day = "2026-06-05") =>
+    makeNotif({ id, type: "EVENT_REGISTRATION_RECEIVED", createdAt: `${day}T1${id.length}:00:00.000Z`, payload: { itemId: "e1", itemName: "Hike", buyerName: name, buyerUserId: userId } });
+
+  it("folds a day's registrations for one event into one row", () => {
+    const items = groupNotifications([reg("a", "Ana", "u1"), reg("b", "Bo", "u2"), reg("c", "Cy", "u3")]);
+    expect(items).toHaveLength(1);
+    const { container } = render(<NotificationRow item={items[0] as NotificationGroup} adapter={{}} now={now} />);
+    expect(container.textContent).toMatch(/registered for Hike/);
+    expect(container.textContent).toMatch(/Ana/);
+  });
+
+  it("keeps different days apart", () => {
+    expect(groupNotifications([reg("a", "Ana", "u1"), reg("b", "Bo", "u2", "2026-06-04")])).toHaveLength(2);
+  });
+
+  it("counts two guests as two people", () => {
+    const items = groupNotifications([reg("a", null, null), reg("b", null, null)]);
+    expect((items[0] as NotificationGroup).actors).toHaveLength(2);
+  });
+});

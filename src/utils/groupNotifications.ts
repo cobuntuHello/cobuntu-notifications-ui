@@ -51,6 +51,11 @@ export interface GroupActor {
   isVerified?: boolean;
   /** Added PR-2 so grouped stacked avatars can show real images, not just initials. */
   imageUrl?: string | null;
+  /**
+   * What makes two actors the same person, when the name cannot: every
+   * guest is "A guest". Falls back to the name.
+   */
+  dedupeKey?: string;
 }
 
 export interface KindCount {
@@ -78,7 +83,28 @@ export interface NotificationGroup {
 
 export type DisplayItem = (Notification & { isGroup?: false }) | NotificationGroup;
 
+/**
+ * Host and seller activity (backend T-333), folded per item per day (T-337):
+ * five registrations for one event this morning are ONE row, "Ana and 4
+ * others registered for Sunset Hike", that expands to the five. Per DAY, not
+ * for ever, so yesterday's sign-ups do not swallow today's into a row that is
+ * already read. Donations, cancellations and milestones stay separate: each
+ * is worth its own line.
+ */
+const ACTIVITY_GROUP_TYPES: string[] = [
+  "EVENT_REGISTRATION_RECEIVED",
+  "COURSE_LEARNER_STARTED",
+  "COURSE_LEARNER_LESSON_COMPLETED",
+  "COURSE_LEARNER_COMPLETED",
+  "FILE_DOWNLOADED",
+];
+
 function getGroupKey(n: Notification): string | null {
+  if (ACTIVITY_GROUP_TYPES.includes(n.type)) {
+    const itemId = (n.payload as any)?.itemId;
+    if (!itemId) return null;
+    return `activity_${n.type}_${itemId}_${String(n.createdAt).slice(0, 10)}`;
+  }
   if (!POST_ACTIVITY_TYPES.includes(n.type)) return null;
   const postId = (n.payload as any)?.postId;
   if (!postId) return null;
@@ -136,6 +162,16 @@ function extractActor(n: Notification): GroupActor {
         imageUrl: a.avatarUrl || a.profileImage || null,
       };
     }
+    case "EVENT_REGISTRATION_RECEIVED":
+    case "COURSE_LEARNER_STARTED":
+    case "COURSE_LEARNER_LESSON_COMPLETED":
+    case "COURSE_LEARNER_COMPLETED":
+    case "FILE_DOWNLOADED":
+      return {
+        name: p.buyerName || "A guest",
+        imageUrl: p.buyerAvatarUrl || null,
+        dedupeKey: p.buyerUserId || `guest_${n.id}`,
+      };
     default:
       return { name: "Someone" };
   }
@@ -188,8 +224,9 @@ export function groupNotifications(notifications: Notification[]): DisplayItem[]
     const actors: GroupActor[] = [];
     for (const n of group) {
       const actor = extractActor(n);
-      if (!seen.has(actor.name)) {
-        seen.add(actor.name);
+      const k = actor.dedupeKey || actor.name;
+      if (!seen.has(k)) {
+        seen.add(k);
         actors.push(actor);
       }
     }
@@ -212,7 +249,7 @@ export function groupNotifications(notifications: Notification[]): DisplayItem[]
       notifications: group,
       actors,
       kindCounts,
-      postId: (latest.payload as any).postId,
+      postId: (latest.payload as any).postId ?? "",
       createdAt: latest.createdAt,
       payload: latest.payload as Record<string, unknown>,
     };
