@@ -124,7 +124,12 @@ export function NotificationRow({ item, adapter, renderAvatar, now, onMuteThread
           isVerified: (u?.isVerified as boolean) ?? fallbackVerified,
         };
       }
-      case "MEMBER_JOINED": {
+      case "MEMBER_JOINED":
+      case "MEMBERSHIP_STARTED":
+      case "MEMBERSHIP_RENEWED":
+      case "MEMBERSHIP_TIER_CHANGED_ADMIN":
+      case "MEMBERSHIP_ENDED":
+      case "MEMBERSHIP_PAYMENT_FAILED_ADMIN": {
         const u = payload.fromUser as Record<string, unknown> | undefined;
         return {
           name: (u?.name as string) || (u?.usertag as string) || fallbackName,
@@ -756,6 +761,90 @@ function buildMessage({
         isClickable: true,
       };
 
+    /* ── Membership activity, for the community's admins (backend T-335) ──
+     *
+     * The member is the actor (avatar + profile click, like "X joined"). A
+     * failed payment is yellow: it is the one an admin can still do
+     * something about. An ending is neutral, not red: people leave.
+     */
+    case "MEMBERSHIP_STARTED": {
+      const tier = (payload.tierName as string) || "";
+      return {
+        messageNode: tier
+          ? line("MEMBERSHIP_STARTED", "{actor} joined on {tier}", { actor: actorSlot, tier })
+          : line("MEMBERSHIP_STARTED_noTier", "{actor} started a membership", { actor: actorSlot }),
+        overlay: <Glyph type="people" />,
+        overlayTone: "green",
+        isClickable: true,
+      };
+    }
+
+    case "MEMBERSHIP_RENEWED": {
+      const tier = (payload.tierName as string) || "";
+      return {
+        messageNode: tier
+          ? line("MEMBERSHIP_RENEWED", "{actor} renewed {tier}", { actor: actorSlot, tier })
+          : line("MEMBERSHIP_RENEWED_noTier", "{actor} renewed their membership", { actor: actorSlot }),
+        overlay: <Glyph type="check" />,
+        overlayTone: "green",
+        isClickable: true,
+      };
+    }
+
+    case "MEMBERSHIP_TIER_CHANGED_ADMIN": {
+      const tier = (payload.toTierName as string) || (payload.tierName as string) || "";
+      return {
+        messageNode: tier
+          ? line("MEMBERSHIP_TIER_CHANGED_ADMIN", "{actor} moved to {tier}", { actor: actorSlot, tier })
+          : line("MEMBERSHIP_TIER_CHANGED_ADMIN_noTier", "{actor} changed their membership", { actor: actorSlot }),
+        overlay: <Glyph type="people" />,
+        overlayTone: "blue",
+        isClickable: true,
+      };
+    }
+
+    case "MEMBERSHIP_ENDED":
+      return {
+        messageNode: payload.activity === "expired"
+          ? line("MEMBERSHIP_ENDED_expired", "{actor}'s membership expired", { actor: actorSlot })
+          : line("MEMBERSHIP_ENDED", "{actor} cancelled their membership", { actor: actorSlot }),
+        isClickable: true,
+      };
+
+    case "MEMBERSHIP_PAYMENT_FAILED_ADMIN":
+      return {
+        messageNode: line("MEMBERSHIP_PAYMENT_FAILED_ADMIN", "{actor}'s membership payment failed", { actor: actorSlot }),
+        snippet: labels?.MEMBERSHIP_PAYMENT_FAILED_ADMIN_snippet ?? "A message from you now may keep them in.",
+        overlayTone: "yellow",
+        isClickable: true,
+      };
+
+    /* ── Milestones (backend T-336) ───────────────────────────────────────
+     *
+     * Each fires once ever per item and threshold. Stated plainly, no
+     * exclamation marks: the same list carries refunds.
+     */
+    case "MILESTONE_REACHED": {
+      const item = (payload.itemName as string) || "your listing";
+      const count = typeof payload.count === "number" ? String(payload.count) : "";
+      const left = typeof payload.left === "number" ? payload.left : 0;
+      const kind = payload.kind as string;
+      const messageNode =
+        kind === "sold_out" ? line("MILESTONE_sold_out", "{item} is sold out", { item })
+        : kind === "few_left" ? (left === 1
+            ? line("MILESTONE_few_left_one", "{item} has 1 place left", { item })
+            : line("MILESTONE_few_left", "{item} has {count} places left", { item, count: String(left) }))
+        : kind === "sales" ? line("MILESTONE_sales", "{item} reached {count} sales", { item, count })
+        : kind === "completions" ? line("MILESTONE_completions", "{count} people completed {item}", { item, count })
+        : kind === "first_sale" ? line("MILESTONE_first_sale", "You made your first sale: {item}", { item })
+        : line("MILESTONE_generic", "{item} reached a milestone", { item });
+      return {
+        messageNode,
+        iconOnly: <SolidIcon type="star" tone={kind === "few_left" ? "yellow" : "green"} />,
+        isClickable: false,
+      };
+    }
+
     case "MEMBER_JOINED":
       return {
         messageNode: community.name
@@ -1094,11 +1183,14 @@ function buildMessage({
     case "EVENT_REGISTRATION_RECEIVED": {
       const eventName = (payload.itemName as string) || "your event";
       const who = (payload.buyerName as string) || labels?.actor_guest || "A guest";
+      /* A day's sign-ups for one event fold into one row (T-337): the names
+         become "Ana and 4 others" and the avatars stack. */
+      const buyer: ReactNode = groupActors ? renderActorNames(groupActors, { locale, labels }) : who;
       return {
         messageNode: payload.isPaid
-          ? line("EVENT_REGISTRATION_RECEIVED_paid", "{buyer} bought a ticket for {event}", { buyer: who, event: eventName })
-          : line("EVENT_REGISTRATION_RECEIVED", "{buyer} registered for {event}", { buyer: who, event: eventName }),
-        iconOnly: (
+          ? line("EVENT_REGISTRATION_RECEIVED_paid", "{buyer} bought a ticket for {event}", { buyer, event: eventName })
+          : line("EVENT_REGISTRATION_RECEIVED", "{buyer} registered for {event}", { buyer, event: eventName }),
+        iconOnly: groupActors ? undefined : (
           <ActorWithBadge
             name={who}
             imageUrl={actorImageFor(payload, "buyer")}
@@ -1164,19 +1256,20 @@ function buildMessage({
       const course = (payload.itemName as string) || "your course";
       const who = (payload.buyerName as string) || labels?.actor_someone || "Someone";
       const finished = type === "COURSE_LEARNER_COMPLETED";
+      const buyer: ReactNode = groupActors ? renderActorNames(groupActors, { locale, labels }) : who;
       const messageNode =
         type === "COURSE_LEARNER_STARTED"
-          ? line("COURSE_LEARNER_STARTED", "{buyer} started {course}", { buyer: who, course })
+          ? line("COURSE_LEARNER_STARTED", "{buyer} started {course}", { buyer, course })
           : finished
-            ? line("COURSE_LEARNER_COMPLETED", "{buyer} completed {course}", { buyer: who, course })
-            : line("COURSE_LEARNER_LESSON_COMPLETED", "{buyer} completed a lesson in {course}", { buyer: who, course });
+            ? line("COURSE_LEARNER_COMPLETED", "{buyer} completed {course}", { buyer, course })
+            : line("COURSE_LEARNER_LESSON_COMPLETED", "{buyer} completed a lesson in {course}", { buyer, course });
       return {
         messageNode,
         /* The lesson title as the snippet, the same way a new lesson is
            named for learners: it is what tells an author WHERE in the course
            somebody is. */
-        snippet: type === "COURSE_LEARNER_LESSON_COMPLETED" ? (payload.lessonTitle as string) || undefined : undefined,
-        iconOnly: (
+        snippet: type === "COURSE_LEARNER_LESSON_COMPLETED" && !groupActors ? (payload.lessonTitle as string) || undefined : undefined,
+        iconOnly: groupActors ? undefined : (
           <ActorWithBadge
             name={who}
             imageUrl={actorImageFor(payload, "buyer")}
@@ -1195,12 +1288,17 @@ function buildMessage({
       const fileName = (payload.fileName as string) || "a file";
       const who = (payload.buyerName as string) || labels?.actor_someone || "Someone";
       return {
-        messageNode: line("FILE_DOWNLOADED", "{buyer} downloaded {file} from {product}", {
-          buyer: who,
-          file: fileName,
-          product: productName,
-        }),
-        iconOnly: (
+        messageNode: groupActors
+          ? line("FILE_DOWNLOADED_group", "{buyer} downloaded files from {product}", {
+              buyer: renderActorNames(groupActors, { locale, labels }),
+              product: productName,
+            })
+          : line("FILE_DOWNLOADED", "{buyer} downloaded {file} from {product}", {
+              buyer: who,
+              file: fileName,
+              product: productName,
+            }),
+        iconOnly: groupActors ? undefined : (
           <ActorWithBadge
             name={who}
             imageUrl={actorImageFor(payload, "buyer")}
@@ -1718,6 +1816,12 @@ function shouldRouteToProfile(type: string): boolean {
     || type === "FRIENDSHIP_CONFIRMED"
     || type === "MEMBERSHIP_REQUEST"
     || type === "MEMBER_JOINED"
+    // Membership activity for admins (backend T-335): the member is the point.
+    || type === "MEMBERSHIP_STARTED"
+    || type === "MEMBERSHIP_RENEWED"
+    || type === "MEMBERSHIP_TIER_CHANGED_ADMIN"
+    || type === "MEMBERSHIP_ENDED"
+    || type === "MEMBERSHIP_PAYMENT_FAILED_ADMIN"
   );
 }
 

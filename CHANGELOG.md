@@ -4,6 +4,13 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.18.0 — 2026-11-11
+
+### Added
+- **Membership activity for admins** (backend T-335): `MEMBERSHIP_STARTED` ("Ana joined on Gold"), `MEMBERSHIP_RENEWED`, `MEMBERSHIP_TIER_CHANGED_ADMIN` ("Ana moved to Silver"), `MEMBERSHIP_ENDED` (cancelled / expired), `MEMBERSHIP_PAYMENT_FAILED_ADMIN` (with a snippet). The member is the actor; the row opens their profile.
+- **Milestones** (backend T-336): `MILESTONE_REACHED` by `kind`: sold out, N places left, N sales, N completions, first sale. Lands on attendees, buyers or the ledger.
+- **Burst grouping** (backend T-337): a day's registrations, course progress or downloads on one item fold into one row ("Ana and 4 others registered for Sunset Hike") that expands. Guests are counted as separate people.
+
 ## 1.17.0 — 2026-11-11
 
 ### Added

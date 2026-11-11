@@ -141,3 +141,11 @@ describe("host and seller activity (backend T-333)", () => {
     expect(d("FILE_DOWNLOADED", { itemType: "product" })).toBeNull();
   });
 });
+
+describe("milestones (backend T-336)", () => {
+  it("lands on attendees, buyers or the ledger", () => {
+    expect(d("MILESTONE_REACHED", { kind: "sold_out", itemType: "event", itemHandle: "hike" })).toBe("/events/hike/manage?view=attendees");
+    expect(d("MILESTONE_REACHED", { kind: "sales", itemType: "product", itemHandle: "kit" })).toBe("/marketplace/kit/manage?view=buyers");
+    expect(d("MILESTONE_REACHED", { kind: "first_sale" })).toBe("/my-ledger");
+  });
+});

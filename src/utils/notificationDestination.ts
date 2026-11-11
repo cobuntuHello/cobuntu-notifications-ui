@@ -192,6 +192,11 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
       return managePath(payload, "attendees");
     case "DONATION_RECEIVED":
       return managePath(payload, "ledger");
+    // Milestones (backend T-336): an event's attendees, a product's buyers;
+    // a first sale has no single item page worth more than the ledger.
+    case "MILESTONE_REACHED":
+      if (str(payload.kind) === "first_sale") return "/my-ledger";
+      return managePath(payload, str(payload.itemType) === "event" ? "attendees" : "buyers");
     case "COURSE_LEARNER_STARTED":
     case "COURSE_LEARNER_LESSON_COMPLETED":
     case "COURSE_LEARNER_COMPLETED":
