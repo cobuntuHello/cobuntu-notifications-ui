@@ -601,3 +601,72 @@ describe("NotificationRow", () => {
     expect(screen.getByText("2 days ago")).toBeInTheDocument();
   });
 });
+
+/**
+ * Host and seller activity (backend T-333). Seven rows for what members do
+ * with something the reader runs.
+ */
+describe("NotificationRow — host and seller activity", () => {
+  const TYPES = [
+    "EVENT_REGISTRATION_RECEIVED", "EVENT_ATTENDEE_CANCELLED", "DONATION_RECEIVED",
+    "COURSE_LEARNER_STARTED", "COURSE_LEARNER_LESSON_COMPLETED", "COURSE_LEARNER_COMPLETED",
+    "FILE_DOWNLOADED",
+  ];
+
+  it("never falls back to the generic row, even with an empty payload", () => {
+    for (const type of TYPES) {
+      const { container, unmount } = render(
+        <NotificationRow item={makeNotif({ type, payload: {} })} adapter={{}} now={now} />,
+      );
+      expect(container.textContent, type).not.toMatch(/New activity/i);
+      unmount();
+    }
+  });
+
+  it("names a guest as a guest, a free RSVP as registered, a paid one as a ticket", () => {
+    const guest = render(<NotificationRow item={makeNotif({ type: "EVENT_REGISTRATION_RECEIVED", payload: { itemName: "Sunset Hike", buyerName: null } })} adapter={{}} now={now} />);
+    expect(guest.container.textContent).toMatch(/A guest registered for Sunset Hike/);
+    guest.unmount();
+    const paid = render(<NotificationRow item={makeNotif({ type: "EVENT_REGISTRATION_RECEIVED", payload: { itemName: "Sunset Hike", buyerName: "Ana", isPaid: true } })} adapter={{}} now={now} />);
+    expect(paid.container.textContent).toMatch(/Ana bought a ticket for Sunset Hike/);
+  });
+
+  it("tells a withdrawn application from a cancelled place", () => {
+    const app = render(<NotificationRow item={makeNotif({ type: "EVENT_ATTENDEE_CANCELLED", payload: { itemName: "Hike", buyerName: "Ana", wasApplication: true } })} adapter={{}} now={now} />);
+    expect(app.container.textContent).toMatch(/Ana withdrew their application to Hike/);
+    app.unmount();
+    const place = render(<NotificationRow item={makeNotif({ type: "EVENT_ATTENDEE_CANCELLED", payload: { itemName: "Hike", buyerName: "Ana" } })} adapter={{}} now={now} />);
+    expect(place.container.textContent).toMatch(/Ana cancelled their place at Hike/);
+  });
+
+  it("formats a donation from the smallest unit, once", () => {
+    // The donation payload is RAW cents (unlike the sale rows, which arrive
+    // pre-formatted): 1000 is ten euros, not a thousand and not ten cents.
+    const { container } = render(
+      <NotificationRow item={makeNotif({ type: "DONATION_RECEIVED", payload: { itemName: "Hike", buyerName: "Ana", amount: 1000, currency: "eur" } })} adapter={{}} now={now} locale="en-GB" />,
+    );
+    expect(container.textContent).toMatch(/Ana donated €10\.00 to Hike/);
+  });
+
+  it("puts the lesson title in the snippet of a lesson row", () => {
+    render(<NotificationRow item={makeNotif({ type: "COURSE_LEARNER_LESSON_COMPLETED", payload: { itemName: "Launch Kit", buyerName: "Ana", lessonTitle: "Pricing" } })} adapter={{}} now={now} />);
+    expect(screen.getByText("Pricing")).toBeInTheDocument();
+  });
+
+  it("names the file and the product of a download", () => {
+    const { container } = render(<NotificationRow item={makeNotif({ type: "FILE_DOWNLOADED", payload: { itemName: "Launch Kit", buyerName: "Ana", fileName: "Workbook.pdf" } })} adapter={{}} now={now} />);
+    expect(container.textContent).toMatch(/Ana downloaded Workbook\.pdf from Launch Kit/);
+  });
+
+  it("uses the host app's template when it has one", () => {
+    const { container } = render(
+      <NotificationRow
+        item={makeNotif({ type: "COURSE_LEARNER_COMPLETED", payload: { itemName: "Launch Kit", buyerName: "Ana" } })}
+        adapter={{}}
+        now={now}
+        labels={{ COURSE_LEARNER_COMPLETED: "{buyer} terminou {course}" }}
+      />,
+    );
+    expect(container.textContent).toMatch(/Ana terminou Launch Kit/);
+  });
+});

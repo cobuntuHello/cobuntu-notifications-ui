@@ -117,3 +117,27 @@ describe("product and course reviews (unified reviews)", () => {
     expect(d("REVIEW_REPLIED", {})).toBeNull();
   });
 });
+
+describe("host and seller activity (backend T-333)", () => {
+  it("an event row lands on the attendee list, by slug or by id", () => {
+    expect(d("EVENT_REGISTRATION_RECEIVED", { itemType: "event", itemHandle: "sunset-hike", itemId: "e1" })).toBe("/events/sunset-hike/manage?view=attendees");
+    expect(d("EVENT_ATTENDEE_CANCELLED", { itemType: "event", itemId: "e1" })).toBe("/events/e1/manage?view=attendees");
+  });
+
+  it("a donation lands on the ledger of whatever received it", () => {
+    expect(d("DONATION_RECEIVED", { itemType: "event", itemHandle: "hike" })).toBe("/events/hike/manage?view=ledger");
+    expect(d("DONATION_RECEIVED", { itemType: "product", itemHandle: "kit-1", productType: "DIGITAL" })).toBe("/marketplace/kit-1/manage?view=ledger");
+  });
+
+  it("a course row goes to /learning by id, never by sku", () => {
+    expect(d("COURSE_LEARNER_COMPLETED", { itemType: "product", itemId: "p1", itemHandle: "sku-1", productType: "COURSE" })).toBe("/learning/p1/manage?view=buyers");
+  });
+
+  it("a download lands on the product's buyers", () => {
+    expect(d("FILE_DOWNLOADED", { itemType: "product", itemHandle: "kit-1" })).toBe("/marketplace/kit-1/manage?view=buyers");
+  });
+
+  it("has nowhere to go without a handle or id, rather than a broken link", () => {
+    expect(d("FILE_DOWNLOADED", { itemType: "product" })).toBeNull();
+  });
+});

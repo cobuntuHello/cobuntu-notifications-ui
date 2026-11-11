@@ -58,6 +58,26 @@ function reviewedItemPath(payload: Record<string, unknown>): string | null {
   return sku ? `/marketplace/${encodeURIComponent(sku)}` : null;
 }
 
+/**
+ * The manage page of the item a row is about, on one of its views. An event
+ * is /events/<slug>/manage, a course /learning/<id>/manage (the course routes
+ * match on the id, never the sku), anything else /marketplace/<sku>/manage.
+ * The slug or sku is `itemHandle`, resolved by the backend at read time; the
+ * id is the fallback the event and course routes also accept.
+ */
+function managePath(payload: Record<string, unknown>, view: string): string | null {
+  const id = str(payload.itemId);
+  const handle = str(payload.itemHandle);
+  if (str(payload.itemType) === "event") {
+    const key = handle || id;
+    return key ? `/events/${encodeURIComponent(key)}/manage?view=${view}` : null;
+  }
+  if (str(payload.productType) === "COURSE") {
+    return id ? `/learning/${encodeURIComponent(id)}/manage?view=${view}` : null;
+  }
+  return handle ? `/marketplace/${encodeURIComponent(handle)}/manage?view=${view}` : null;
+}
+
 export function destinationFor({ type, payload }: DestinationInput): string | null {
   switch (type) {
     // ── The money is the point, so the ledger is the destination ──────────
@@ -163,6 +183,20 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
      */
     case "DOWNLOAD_LIMIT_REACHED":
       return artifactPath(payload);
+
+    // ── Host and seller activity (backend T-333) ──────────────────────────
+    // Each lands on the manage view where the reader sees the person: the
+    // attendee list, the buyers, or the ledger for a donation.
+    case "EVENT_REGISTRATION_RECEIVED":
+    case "EVENT_ATTENDEE_CANCELLED":
+      return managePath(payload, "attendees");
+    case "DONATION_RECEIVED":
+      return managePath(payload, "ledger");
+    case "COURSE_LEARNER_STARTED":
+    case "COURSE_LEARNER_LESSON_COMPLETED":
+    case "COURSE_LEARNER_COMPLETED":
+    case "FILE_DOWNLOADED":
+      return managePath(payload, "buyers");
 
     default:
       return null;
