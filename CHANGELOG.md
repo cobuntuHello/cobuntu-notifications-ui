@@ -4,6 +4,12 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.17.0 — 2026-11-11
+
+### Added
+- **Host and seller activity rows** (backend T-333). `EVENT_REGISTRATION_RECEIVED` ("{buyer} registered for {event}", or "bought a ticket for" when paid), `EVENT_ATTENDEE_CANCELLED` (cancelled their place / withdrew their application), `DONATION_RECEIVED` ("{buyer} donated {amount} to {item}", amount formatted here from the smallest unit), `COURSE_LEARNER_STARTED` / `_LESSON_COMPLETED` (lesson title as the snippet) / `_COMPLETED`, and `FILE_DOWNLOADED`. A guest is "A guest" (`labels.actor_guest`), a missing name "Someone" (`labels.actor_someone`).
+- Destinations: event rows open the attendee list, a donation the item's ledger, course and download rows the buyers view (`/learning/<id>/manage` for a course, `/marketplace/<sku>/manage` otherwise).
+
 ## 1.15.0 — 2026-11-09
 
 ### Added

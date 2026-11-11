@@ -1082,6 +1082,138 @@ function buildMessage({
       };
     }
 
+    /* ── Host and seller activity (backend T-333) ────────────────────────
+     *
+     * What members do with something the reader runs: registered, cancelled,
+     * donated, started or finished a course, completed a lesson, downloaded a
+     * file. All share one payload shape: itemType, itemId, itemName,
+     * buyerName (null for a guest), and the avatar resolved from buyerUserId.
+     * A guest has no name, and the row says "A guest" rather than "Someone",
+     * because to a host those are different facts.
+     */
+    case "EVENT_REGISTRATION_RECEIVED": {
+      const eventName = (payload.itemName as string) || "your event";
+      const who = (payload.buyerName as string) || labels?.actor_guest || "A guest";
+      return {
+        messageNode: payload.isPaid
+          ? line("EVENT_REGISTRATION_RECEIVED_paid", "{buyer} bought a ticket for {event}", { buyer: who, event: eventName })
+          : line("EVENT_REGISTRATION_RECEIVED", "{buyer} registered for {event}", { buyer: who, event: eventName }),
+        iconOnly: (
+          <ActorWithBadge
+            name={who}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType="check"
+            tone="green"
+            fallback={<SolidIcon type="check" tone="green" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
+    case "EVENT_ATTENDEE_CANCELLED": {
+      const eventName = (payload.itemName as string) || "your event";
+      const who = (payload.buyerName as string) || labels?.actor_guest || "A guest";
+      return {
+        messageNode: payload.wasApplication
+          ? line("EVENT_ATTENDEE_CANCELLED_application", "{buyer} withdrew their application to {event}", { buyer: who, event: eventName })
+          : line("EVENT_ATTENDEE_CANCELLED", "{buyer} cancelled their place at {event}", { buyer: who, event: eventName }),
+        /* Neutral, not red: somebody changing their plans is news, not a
+           problem, and a red row would make every cancellation look like a
+           failure the host has to fix. */
+        iconOnly: (
+          <ActorWithBadge
+            name={who}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType="x"
+            tone="neutral"
+            fallback={<SolidIcon type="x" tone="neutral" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
+    case "DONATION_RECEIVED": {
+      const itemName = (payload.itemName as string) || "your event";
+      const who = (payload.buyerName as string) || labels?.actor_someone || "Someone";
+      const amount = formatMinorAmount(payload.amount, payload.currency, locale);
+      return {
+        messageNode: amount
+          ? line("DONATION_RECEIVED", "{buyer} donated {amount} to {item}", { buyer: who, amount, item: itemName })
+          : line("DONATION_RECEIVED_noAmount", "{buyer} donated to {item}", { buyer: who, item: itemName }),
+        iconOnly: (
+          <ActorWithBadge
+            name={who}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType="coin"
+            tone="green"
+            fallback={<SolidIcon type="coin" tone="green" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
+    case "COURSE_LEARNER_STARTED":
+    case "COURSE_LEARNER_LESSON_COMPLETED":
+    case "COURSE_LEARNER_COMPLETED": {
+      const course = (payload.itemName as string) || "your course";
+      const who = (payload.buyerName as string) || labels?.actor_someone || "Someone";
+      const finished = type === "COURSE_LEARNER_COMPLETED";
+      const messageNode =
+        type === "COURSE_LEARNER_STARTED"
+          ? line("COURSE_LEARNER_STARTED", "{buyer} started {course}", { buyer: who, course })
+          : finished
+            ? line("COURSE_LEARNER_COMPLETED", "{buyer} completed {course}", { buyer: who, course })
+            : line("COURSE_LEARNER_LESSON_COMPLETED", "{buyer} completed a lesson in {course}", { buyer: who, course });
+      return {
+        messageNode,
+        /* The lesson title as the snippet, the same way a new lesson is
+           named for learners: it is what tells an author WHERE in the course
+           somebody is. */
+        snippet: type === "COURSE_LEARNER_LESSON_COMPLETED" ? (payload.lessonTitle as string) || undefined : undefined,
+        iconOnly: (
+          <ActorWithBadge
+            name={who}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType={type === "COURSE_LEARNER_STARTED" ? "package" : "check"}
+            tone={finished ? "green" : "blue"}
+            fallback={<SolidIcon type={type === "COURSE_LEARNER_STARTED" ? "package" : "check"} tone={finished ? "green" : "blue"} />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
+    case "FILE_DOWNLOADED": {
+      const productName = (payload.itemName as string) || "your product";
+      const fileName = (payload.fileName as string) || "a file";
+      const who = (payload.buyerName as string) || labels?.actor_someone || "Someone";
+      return {
+        messageNode: line("FILE_DOWNLOADED", "{buyer} downloaded {file} from {product}", {
+          buyer: who,
+          file: fileName,
+          product: productName,
+        }),
+        iconOnly: (
+          <ActorWithBadge
+            name={who}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType="package"
+            tone="neutral"
+            fallback={<SolidIcon type="package" tone="neutral" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
     /* ── Approvals, both sides (feat/approval-notifications) ─────────────
      *
      * Every approval flow on the platform used to notify one side. The
@@ -1557,6 +1689,23 @@ export function safeNotificationUrl(raw: unknown): string | null {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
     return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * "€10.00" from an amount in the currency's smallest unit (the backend's
+ * money convention), in the reader's locale. The divisor comes from the
+ * currency itself, so a zero-decimal currency (JPY) is not divided by 100.
+ * Returns null rather than a wrong number when either half is missing.
+ */
+export function formatMinorAmount(amount: unknown, currency: unknown, locale?: string): string | null {
+  if (typeof amount !== "number" || !Number.isFinite(amount) || typeof currency !== "string" || !currency) return null;
+  try {
+    const fmt = new Intl.NumberFormat(locale || undefined, { style: "currency", currency: currency.toUpperCase() });
+    const digits = fmt.resolvedOptions().maximumFractionDigits ?? 2;
+    return fmt.format(amount / 10 ** digits);
   } catch {
     return null;
   }
