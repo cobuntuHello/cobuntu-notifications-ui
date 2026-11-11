@@ -649,8 +649,10 @@ describe("NotificationRow — host and seller activity", () => {
   });
 
   it("puts the lesson title in the snippet of a lesson row", () => {
-    render(<NotificationRow item={makeNotif({ type: "COURSE_LEARNER_LESSON_COMPLETED", payload: { itemName: "Launch Kit", buyerName: "Ana", lessonTitle: "Pricing" } })} adapter={{}} now={now} />);
-    expect(screen.getByText("Pricing")).toBeInTheDocument();
+    const { container } = render(<NotificationRow item={makeNotif({ type: "COURSE_LEARNER_LESSON_COMPLETED", payload: { itemName: "Launch Kit", buyerName: "Ana", lessonTitle: "Pricing" } })} adapter={{}} now={now} />);
+    // The snippet is printed inside curly quotes, as every snippet is.
+    expect(container.textContent).toMatch(/Ana completed a lesson in Launch Kit/);
+    expect(container.textContent).toContain("\u201cPricing\u201d");
   });
 
   it("names the file and the product of a download", () => {
