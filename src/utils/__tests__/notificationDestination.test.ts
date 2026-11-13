@@ -122,6 +122,7 @@ describe("host and seller activity (backend T-333)", () => {
   it("an event row lands on the attendee list, by slug or by id", () => {
     expect(d("EVENT_REGISTRATION_RECEIVED", { itemType: "event", itemHandle: "sunset-hike", itemId: "e1" })).toBe("/events/sunset-hike/manage?view=attendees");
     expect(d("EVENT_ATTENDEE_CANCELLED", { itemType: "event", itemId: "e1" })).toBe("/events/e1/manage?view=attendees");
+    expect(d("EVENT_COHOST_ADDED", { itemType: "event", itemId: "e1", itemHandle: "food-for-thought-1" })).toBe("/events/food-for-thought-1/manage?view=overview");
   });
 
   it("a donation lands on the ledger of whatever received it", () => {

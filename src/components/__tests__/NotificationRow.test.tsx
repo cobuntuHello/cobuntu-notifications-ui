@@ -733,3 +733,20 @@ describe("burst grouping of host activity (backend T-337)", () => {
     expect((items[0] as NotificationGroup).actors).toHaveLength(2);
   });
 });
+
+/** Made a co-host of somebody else's event (backend event.cohost_added). */
+describe("NotificationRow — co-host added", () => {
+  it("says who made you a co-host of what", () => {
+    const { container } = render(
+      <NotificationRow item={makeNotif({ type: "EVENT_COHOST_ADDED", payload: { itemName: "Food for Thought #1", buyerName: "Impact Hub Porto" } })} adapter={{}} now={now} />,
+    );
+    expect(container.textContent).toMatch(/Impact Hub Porto made you a co-host of Food for Thought #1/);
+  });
+
+  it("never falls back to the generic row, even with an empty payload", () => {
+    const { container } = render(<NotificationRow item={makeNotif({ type: "EVENT_COHOST_ADDED", payload: {} })} adapter={{}} now={now} />);
+    expect(container.textContent).not.toMatch(/New activity/i);
+    expect(container.textContent).toMatch(/Someone made you a co-host of an event/);
+  });
+});
+
