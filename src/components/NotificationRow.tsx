@@ -1204,6 +1204,27 @@ function buildMessage({
       };
     }
 
+    /* You were made a co-host of somebody else's event (backend
+       event.cohost_added). The shield says "you can manage this now". */
+    case "EVENT_COHOST_ADDED": {
+      const eventName = (payload.itemName as string) || "an event";
+      const who = (payload.buyerName as string) || labels?.actor_someone || "Someone";
+      return {
+        messageNode: line("EVENT_COHOST_ADDED", "{actor} made you a co-host of {event}", { actor: who, event: eventName }),
+        iconOnly: (
+          <ActorWithBadge
+            name={who}
+            imageUrl={actorImageFor(payload, "buyer")}
+            glyphType="shield"
+            tone="blue"
+            fallback={<SolidIcon type="shield" tone="blue" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: false,
+      };
+    }
+
     case "EVENT_ATTENDEE_CANCELLED": {
       const eventName = (payload.itemName as string) || "your event";
       const who = (payload.buyerName as string) || labels?.actor_guest || "A guest";

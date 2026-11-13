@@ -192,6 +192,9 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
       return managePath(payload, "attendees");
     case "DONATION_RECEIVED":
       return managePath(payload, "ledger");
+    // You were made a co-host: the event's manage overview, where you now are.
+    case "EVENT_COHOST_ADDED":
+      return managePath(payload, "overview");
     // Milestones (backend T-336): an event's attendees, a product's buyers;
     // a first sale has no single item page worth more than the ledger.
     case "MILESTONE_REACHED":
