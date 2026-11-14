@@ -1459,6 +1459,42 @@ function buildMessage({
       };
     }
 
+    /*
+     * Somebody gave you something (docs/features/gifts.md in the backend): a
+     * product, a course or an event ticket. The giver's face with a gift
+     * badge, and an Unwrap pill: the row opens the one-time unwrap screen.
+     */
+    case "GIFT_RECEIVED": {
+      const giverName = (payload.giverName as string) || actor.name || "Someone";
+      const itemName = (payload.itemName as string) || "";
+      return {
+        messageNode: (
+          <>
+            {itemName
+              ? line("GIFT_RECEIVED", "{giver} sent you a gift: {item}", { giver: bold(giverName), item: bold(itemName) })
+              : line("GIFT_RECEIVED_noItem", "{giver} sent you a gift", { giver: bold(giverName) })}
+            <span
+              className="ml-2 inline-flex items-center rounded-full px-2.5 py-0.5 align-middle text-[12px] font-semibold"
+              style={{ background: "var(--brand-color, #111827)", color: "var(--brand-contrast, #ffffff)" }}
+            >
+              {labels?.GIFT_RECEIVED_unwrap ?? "Unwrap"}
+            </span>
+          </>
+        ),
+        iconOnly: (
+          <ActorWithBadge
+            name={giverName}
+            imageUrl={actorImageFor(payload, "giver")}
+            glyphType="gift"
+            tone="green"
+            fallback={<SolidIcon type="gift" tone="green" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: true,
+      };
+    }
+
     case "REFUND_COMPLETED": {
       const productName = (payload.productName as string) || "your purchase";
       const refundAmount = payload.refundAmount as string | undefined;
@@ -1916,7 +1952,7 @@ function Glyph({ type }: { type: "heart" | "check" | "people" }) {
  * every row written before the backend started resolving one. So this degrades
  * to exactly today's appearance rather than to a blank circle.
  */
-type GlyphType = "shield" | "star" | "package" | "ban" | "arrow-left" | "coin" | "x" | "check";
+type GlyphType = "shield" | "star" | "package" | "ban" | "arrow-left" | "coin" | "x" | "check" | "gift";
 
 /** The glyph shapes, shared by the full tile and the small overlay badge. */
 function glyphPath(type: GlyphType): ReactNode {
@@ -1937,6 +1973,14 @@ function glyphPath(type: GlyphType): ReactNode {
       return <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
     case "check":
       return <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
+    case "gift":
+      return (
+        <g stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="8" width="18" height="4" rx="1" />
+          <path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
+          <path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" />
+        </g>
+      );
   }
 }
 

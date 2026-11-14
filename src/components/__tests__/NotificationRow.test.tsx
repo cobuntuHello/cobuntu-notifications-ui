@@ -263,6 +263,23 @@ describe("NotificationRow — commerce", () => {
   });
 });
 
+describe("gifts", () => {
+  it("renders GIFT_RECEIVED with the giver, the gift and an Unwrap pill", () => {
+    const { container } = render(
+      <NotificationRow
+        item={makeNotif({ type: "GIFT_RECEIVED", payload: { giverName: "Stella Marie", itemName: "Safe to be seen Workbook", giftKind: "product", giftId: "g1" } })}
+        adapter={{}}
+        now={now}
+      />,
+    );
+    expect(container.textContent).toContain("Stella Marie");
+    expect(container.textContent).toContain("sent you a gift");
+    expect(container.textContent).toContain("Safe to be seen Workbook");
+    expect(container.textContent).toContain("Unwrap");
+    expect(container.textContent).not.toMatch(/New activity from/i);
+  });
+});
+
 describe("NotificationRow", () => {
   it("renders FRIEND_REQUEST_INBOUND with the actor's real name (not 'Someone')", () => {
     const item = makeNotif({
