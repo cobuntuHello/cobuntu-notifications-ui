@@ -106,6 +106,15 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
     case "PAYOUT_FAILED":
       return "/my-payouts";
 
+    // A gift opens its one-time unwrap screen, which then opens the item.
+    case "GIFT_RECEIVED": {
+      const kind = str(payload.giftKind);
+      const id = str(payload.giftId);
+      return (kind === "product" || kind === "event") && id
+        ? `/gifts/${kind}/${encodeURIComponent(id)}`
+        : null;
+    }
+
     // The receipt, the invoice and the download link all live together.
     case "PURCHASE_COMPLETED":
     case "REFUND_COMPLETED":

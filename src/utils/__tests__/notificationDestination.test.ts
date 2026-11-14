@@ -150,3 +150,16 @@ describe("milestones (backend T-336)", () => {
     expect(d("MILESTONE_REACHED", { kind: "first_sale" })).toBe("/my-ledger");
   });
 });
+
+describe("gifts", () => {
+  it("a gift opens its unwrap screen, for a product and for an event", () => {
+    expect(destinationFor({ type: "GIFT_RECEIVED", payload: { giftKind: "product", giftId: "g1" } })).toBe("/gifts/product/g1");
+    expect(destinationFor({ type: "GIFT_RECEIVED", payload: { giftKind: "event", giftId: "a1" } })).toBe("/gifts/event/a1");
+  });
+
+  it("a malformed gift row goes nowhere", () => {
+    expect(destinationFor({ type: "GIFT_RECEIVED", payload: { giftKind: "spaceship", giftId: "x" } })).toBeNull();
+    expect(destinationFor({ type: "GIFT_RECEIVED", payload: {} })).toBeNull();
+  });
+});
+
