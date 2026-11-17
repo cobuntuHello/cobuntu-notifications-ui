@@ -160,6 +160,10 @@ describe("gifts", () => {
   it("a malformed gift row goes nowhere", () => {
     expect(destinationFor({ type: "GIFT_RECEIVED", payload: { giftKind: "spaceship", giftId: "x" } })).toBeNull();
     expect(destinationFor({ type: "GIFT_RECEIVED", payload: {} })).toBeNull();
+    // Added by a host: straight to the item, on whatever host the app runs on.
+    expect(destinationFor({ type: "ITEM_ADDED", payload: { url: "https://pbn.cobuntu.com/events/founders-dinner" } })).toBe("/events/founders-dinner");
+    expect(destinationFor({ type: "ITEM_ADDED", payload: { url: "https://x.cobuntu.com/learning/c1" } })).toBe("/learning/c1");
+    expect(destinationFor({ type: "ITEM_ADDED", payload: {} })).toBeNull();
   });
 });
 

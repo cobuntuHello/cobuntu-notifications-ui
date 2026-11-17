@@ -280,6 +280,23 @@ describe("gifts", () => {
   });
 });
 
+describe("added by a host (not a gift)", () => {
+  it("renders ITEM_ADDED with who added you and the item, and no Unwrap pill", () => {
+    const { container } = render(
+      <NotificationRow
+        item={makeNotif({ type: "ITEM_ADDED", payload: { adderName: "Stella Marie", itemName: "Founders Dinner", itemKind: "event", url: "https://pbn.cobuntu.com/events/founders-dinner" } })}
+        adapter={{}}
+        now={now}
+      />,
+    );
+    expect(container.textContent).toContain("Stella Marie");
+    expect(container.textContent).toContain("added you to");
+    expect(container.textContent).toContain("Founders Dinner");
+    expect(container.textContent).not.toContain("Unwrap");
+    expect(container.textContent).not.toMatch(/New activity from/i);
+  });
+});
+
 describe("NotificationRow", () => {
   it("renders FRIEND_REQUEST_INBOUND with the actor's real name (not 'Someone')", () => {
     const item = makeNotif({
