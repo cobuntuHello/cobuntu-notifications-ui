@@ -1495,6 +1495,32 @@ function buildMessage({
       };
     }
 
+    /*
+     * A host simply ADDED you to an event, a product or a course (backend
+     * docs/features/add-vs-gift.md): not a gift, so no Unwrap pill. The row
+     * opens the item itself.
+     */
+    case "ITEM_ADDED": {
+      const adderName = (payload.adderName as string) || actor.name || "Someone";
+      const itemName = (payload.itemName as string) || "";
+      return {
+        messageNode: itemName
+          ? line("ITEM_ADDED", "{adder} added you to {item}", { adder: bold(adderName), item: bold(itemName) })
+          : line("ITEM_ADDED_noItem", "{adder} added you", { adder: bold(adderName) }),
+        iconOnly: (
+          <ActorWithBadge
+            name={adderName}
+            imageUrl={actorImageFor(payload, "adder")}
+            glyphType="check"
+            tone="green"
+            fallback={<SolidIcon type="check" tone="green" />}
+            renderAvatar={renderAvatar}
+          />
+        ),
+        isClickable: true,
+      };
+    }
+
     case "REFUND_COMPLETED": {
       const productName = (payload.productName as string) || "your purchase";
       const refundAmount = payload.refundAmount as string | undefined;

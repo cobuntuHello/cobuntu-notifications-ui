@@ -115,6 +115,19 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
         : null;
     }
 
+    // Added by a host (add-vs-gift.md): the item itself. Core sends the absolute
+    // link; the path is what this app routes on.
+    case "ITEM_ADDED": {
+      const url = str(payload.url);
+      if (!url) return null;
+      try {
+        const u = new URL(url);
+        return u.pathname && u.pathname !== "/" ? `${u.pathname}${u.search}` : null;
+      } catch {
+        return url.startsWith("/") ? url : null;
+      }
+    }
+
     // The receipt, the invoice and the download link all live together.
     case "PURCHASE_COMPLETED":
     case "REFUND_COMPLETED":
