@@ -115,9 +115,11 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
         : null;
     }
 
-    // Added by a host (add-vs-gift.md): the item itself. Core sends the absolute
-    // link; the path is what this app routes on.
-    case "ITEM_ADDED": {
+    // Added by a host (add-vs-gift.md): the item itself. A badge unlocked
+    // (profile-badges.md): their own profile. Core sends the absolute link; the
+    // path is what this app routes on.
+    case "ITEM_ADDED":
+    case "BADGE_EARNED": {
       const url = str(payload.url);
       if (!url) return null;
       try {
