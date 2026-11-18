@@ -4,6 +4,11 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.23.0 — 2026-11-18
+
+### Added
+- **A bought gift after delivery** (backend gift-purchases phase 2): `GIFT_OPENED` ("Ana opened your gift: Workbook") and `GIFT_DECLINED` ("Ana passed on your gift: Workbook. You were refunded.") open My orders; `GIFT_WITHDRAWN` tells the recipient gently that a gift they had is no longer available (no reason, no names), and goes nowhere.
+
 ## 1.18.0 — 2026-11-11
 
 ### Added
