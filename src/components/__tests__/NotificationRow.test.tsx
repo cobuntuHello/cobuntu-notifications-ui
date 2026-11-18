@@ -796,3 +796,32 @@ describe("a badge unlocked", () => {
     expect(renderRow({ badgeKind: "tier" })).toContain("You unlocked a badge");
   });
 });
+
+describe("a bought gift after delivery", () => {
+  const text = (type: string, payload: Record<string, unknown>) =>
+    render(<NotificationRow item={makeNotif({ type, payload })} adapter={{}} now={now} />).container.textContent ?? "";
+
+  it("opened: names the person and the gift, with fallbacks", () => {
+    expect(text("GIFT_OPENED", { recipientName: "Ana Barros", itemName: "Workbook" })).toContain("Ana Barros opened your gift: Workbook");
+    expect(text("GIFT_OPENED", { itemName: "Workbook" })).toContain("Your gift was opened: Workbook");
+    expect(text("GIFT_OPENED", {})).toContain("Your gift was opened");
+  });
+
+  it("declined: says they were refunded", () => {
+    expect(text("GIFT_DECLINED", { recipientName: "Ana Barros", itemName: "Workbook" })).toContain("Ana Barros passed on your gift: Workbook. You were refunded.");
+    expect(text("GIFT_DECLINED", {})).toContain("Your gift was passed on. You were refunded.");
+  });
+
+  it("withdrawn: tells the recipient gently, with no reason", () => {
+    const t = text("GIFT_WITHDRAWN", { itemName: "Workbook", giverName: "Diogo" });
+    expect(t).toContain("Workbook is no longer available to you");
+    expect(t).not.toMatch(/refund|charged|Diogo/i);
+    expect(text("GIFT_WITHDRAWN", {})).toContain("A gift you had is no longer available to you");
+  });
+
+  it("never falls back to the generic row", () => {
+    for (const type of ["GIFT_OPENED", "GIFT_DECLINED", "GIFT_WITHDRAWN"]) {
+      expect(text(type, {})).not.toMatch(/New activity/i);
+    }
+  });
+});

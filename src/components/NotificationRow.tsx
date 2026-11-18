@@ -1544,6 +1544,55 @@ function buildMessage({
       };
     }
 
+    /*
+     * A gift YOU bought, after it was delivered (backend
+     * docs/features/gift-purchases.md): opened by its recipient, or turned
+     * down (and you were refunded). The recipient's name comes from the
+     * payload; there is no face to show, so a gift glyph stands in.
+     */
+    case "GIFT_OPENED": {
+      const recipient = (payload.recipientName as string) || "";
+      const itemName = (payload.itemName as string) || "";
+      return {
+        messageNode: recipient && itemName
+          ? line("GIFT_OPENED", "{recipient} opened your gift: {item}", { recipient: bold(recipient), item: bold(itemName) })
+          : itemName
+            ? line("GIFT_OPENED_noRecipient", "Your gift was opened: {item}", { item: bold(itemName) })
+            : line("GIFT_OPENED_plain", "Your gift was opened", {}),
+        iconOnly: <SolidIcon type="gift" tone="green" />,
+        isClickable: true,
+      };
+    }
+
+    case "GIFT_DECLINED": {
+      const recipient = (payload.recipientName as string) || "";
+      const itemName = (payload.itemName as string) || "";
+      return {
+        messageNode: recipient && itemName
+          ? line("GIFT_DECLINED", "{recipient} passed on your gift: {item}. You were refunded.", { recipient: bold(recipient), item: bold(itemName) })
+          : itemName
+            ? line("GIFT_DECLINED_noRecipient", "Your gift was passed on: {item}. You were refunded.", { item: bold(itemName) })
+            : line("GIFT_DECLINED_plain", "Your gift was passed on. You were refunded.", {}),
+        iconOnly: <SolidIcon type="gift" tone="gray" />,
+        isClickable: true,
+      };
+    }
+
+    /*
+     * To the RECIPIENT: a gift they had was taken back (its buyer was refunded
+     * or charged it back). Said gently, with no reason and no blame.
+     */
+    case "GIFT_WITHDRAWN": {
+      const itemName = (payload.itemName as string) || "";
+      return {
+        messageNode: itemName
+          ? line("GIFT_WITHDRAWN", "{item} is no longer available to you", { item: bold(itemName) })
+          : line("GIFT_WITHDRAWN_plain", "A gift you had is no longer available to you", {}),
+        iconOnly: <SolidIcon type="gift" tone="gray" />,
+        isClickable: false,
+      };
+    }
+
     case "REFUND_COMPLETED": {
       const productName = (payload.productName as string) || "your purchase";
       const refundAmount = payload.refundAmount as string | undefined;

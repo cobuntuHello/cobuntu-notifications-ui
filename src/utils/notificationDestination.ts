@@ -115,6 +115,12 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
         : null;
     }
 
+    // A gift the person BOUGHT: where the order and its gift state live.
+    // GIFT_WITHDRAWN (to the recipient) has nowhere to go: it is gone.
+    case "GIFT_OPENED":
+    case "GIFT_DECLINED":
+      return "/my-orders";
+
     // Added by a host (add-vs-gift.md): the item itself. A badge unlocked
     // (profile-badges.md): their own profile. Core sends the absolute link; the
     // path is what this app routes on.

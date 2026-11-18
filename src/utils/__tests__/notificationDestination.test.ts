@@ -169,3 +169,10 @@ describe("gifts", () => {
   });
 });
 
+describe("a bought gift", () => {
+  it("opened or declined opens My orders; withdrawn goes nowhere", () => {
+    expect(destinationFor({ type: "GIFT_OPENED", payload: { saleId: "s1" } })).toBe("/my-orders");
+    expect(destinationFor({ type: "GIFT_DECLINED", payload: { saleId: "s1" } })).toBe("/my-orders");
+    expect(destinationFor({ type: "GIFT_WITHDRAWN", payload: { saleId: "s1" } })).toBeNull();
+  });
+});
