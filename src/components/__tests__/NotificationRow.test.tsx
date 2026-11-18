@@ -784,3 +784,15 @@ describe("NotificationRow — co-host added", () => {
   });
 });
 
+
+describe("a badge unlocked", () => {
+  const renderRow = (payload: Record<string, unknown>) =>
+    render(<NotificationRow item={makeNotif({ type: "BADGE_EARNED", payload })} adapter={{}} now={now} />).container.textContent ?? "";
+
+  it("names the badge: Founding with its number, Premium, or the tier", () => {
+    expect(renderRow({ badgeKind: "founding", foundingNumber: 1, url: "https://x.cobuntu.com/members/diogo" })).toContain("Badge unlocked: Founding Member No. 1");
+    expect(renderRow({ badgeKind: "premium" })).toContain("Badge unlocked: Cobuntu Premium");
+    expect(renderRow({ badgeKind: "tier", tierName: "Patron", communityName: "PBN" })).toContain("Badge unlocked: Patron");
+    expect(renderRow({ badgeKind: "tier" })).toContain("You unlocked a badge");
+  });
+});

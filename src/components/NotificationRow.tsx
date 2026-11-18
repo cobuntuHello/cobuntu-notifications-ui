@@ -1521,6 +1521,29 @@ function buildMessage({
       };
     }
 
+    /*
+     * "Badge unlocked: Founding Member No. 1" (backend
+     * docs/features/profile-badges.md): the bell half of the one-time moment.
+     * Opens their own profile, where the badge is.
+     */
+    case "BADGE_EARNED": {
+      const kind = payload.badgeKind as string | undefined;
+      const number = payload.foundingNumber as number | undefined;
+      // A plain string, so it can sit in bold inside the sentence.
+      const badgeName: string = kind === "founding" && number
+        ? (labels?.BADGE_EARNED_founding ?? "Founding Member No. {number}").replace("{number}", String(number))
+        : kind === "premium"
+          ? "Cobuntu Premium"
+          : ((payload.tierName as string) || "");
+      return {
+        messageNode: badgeName
+          ? line("BADGE_EARNED", "Badge unlocked: {badge}", { badge: bold(badgeName) })
+          : line("BADGE_EARNED_noName", "You unlocked a badge", {}),
+        iconOnly: <SolidIcon type="star" tone="yellow" />,
+        isClickable: true,
+      };
+    }
+
     case "REFUND_COMPLETED": {
       const productName = (payload.productName as string) || "your purchase";
       const refundAmount = payload.refundAmount as string | undefined;
