@@ -4,6 +4,11 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.23.1 — 2026-11-18
+
+### Fixed
+- The declined and withdrawn gift rows used an icon tone the icon does not have ("gray"), which failed the app's type check. They use "neutral".
+
 ## 1.23.0 — 2026-11-18
 
 ### Added
