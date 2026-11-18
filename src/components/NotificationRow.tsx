@@ -1573,7 +1573,7 @@ function buildMessage({
           : itemName
             ? line("GIFT_DECLINED_noRecipient", "Your gift was passed on: {item}. You were refunded.", { item: bold(itemName) })
             : line("GIFT_DECLINED_plain", "Your gift was passed on. You were refunded.", {}),
-        iconOnly: <SolidIcon type="gift" tone="gray" />,
+        iconOnly: <SolidIcon type="gift" tone="neutral" />,
         isClickable: true,
       };
     }
@@ -1588,7 +1588,7 @@ function buildMessage({
         messageNode: itemName
           ? line("GIFT_WITHDRAWN", "{item} is no longer available to you", { item: bold(itemName) })
           : line("GIFT_WITHDRAWN_plain", "A gift you had is no longer available to you", {}),
-        iconOnly: <SolidIcon type="gift" tone="gray" />,
+        iconOnly: <SolidIcon type="gift" tone="neutral" />,
         isClickable: false,
       };
     }
