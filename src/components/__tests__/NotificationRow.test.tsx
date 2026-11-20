@@ -797,6 +797,24 @@ describe("a badge unlocked", () => {
   });
 });
 
+describe("the morning after an event (contacts)", () => {
+  const renderRow = (payload: Record<string, unknown>) =>
+    render(<NotificationRow item={makeNotif({ type: "CONTACTS_MORNING_AFTER", payload })} adapter={{}} now={now} />).container.textContent ?? "";
+
+  it("counts the people you added there, or names the one", () => {
+    expect(renderRow({ eventName: "Business Talks #60", count: 3, names: ["Clara", "Marta", "Rui"] }))
+      .toContain("You met 3 people at Business Talks #60. Add a note while it's fresh.");
+    expect(renderRow({ eventName: "Business Talks #60", count: 1, names: ["Clara"] }))
+      .toContain("You met Clara at Business Talks #60. Add a note while it's fresh.");
+  });
+
+  it("never falls back to the generic row, even with an empty payload", () => {
+    const text = renderRow({});
+    expect(text).not.toMatch(/New activity/i);
+    expect(text).toContain("You met new people yesterday.");
+  });
+});
+
 describe("a bought gift after delivery", () => {
   const text = (type: string, payload: Record<string, unknown>) =>
     render(<NotificationRow item={makeNotif({ type, payload })} adapter={{}} now={now} />).container.textContent ?? "";

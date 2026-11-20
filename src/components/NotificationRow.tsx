@@ -1545,6 +1545,30 @@ function buildMessage({
     }
 
     /*
+     * The morning after an event (backend docs/features/contacts-v2.md):
+     * "You met 3 people at Business Talks #60. Add a note while it's fresh."
+     * Only people this person added there themselves, never who else came.
+     * Opens Contacts.
+     */
+    case "CONTACTS_MORNING_AFTER": {
+      const eventName = (payload.eventName as string) || "";
+      const count = Number(payload.count) || 0;
+      const names = Array.isArray(payload.names) ? (payload.names as unknown[]).filter((n): n is string => typeof n === "string") : [];
+      const messageNode = count === 1 && names[0]
+        ? (eventName
+          ? line("CONTACTS_MORNING_AFTER_one", "You met {name} at {event}. Add a note while it's fresh.", { name: bold(names[0]), event: bold(eventName) })
+          : line("CONTACTS_MORNING_AFTER_oneNoEvent", "You met {name} yesterday. Add a note while it's fresh.", { name: bold(names[0]) }))
+        : eventName
+          ? line("CONTACTS_MORNING_AFTER", "You met {count} people at {event}. Add a note while it's fresh.", { count: bold(String(count || "")), event: bold(eventName) })
+          : line("CONTACTS_MORNING_AFTER_noEvent", "You met new people yesterday. Add a note while it's fresh.", {});
+      return {
+        messageNode,
+        iconOnly: <SolidIcon type="people" tone="blue" />,
+        isClickable: true,
+      };
+    }
+
+    /*
      * A gift YOU bought, after it was delivered (backend
      * docs/features/gift-purchases.md): opened by its recipient, or turned
      * down (and you were refunded). The recipient's name comes from the
@@ -2050,7 +2074,7 @@ function Glyph({ type }: { type: "heart" | "check" | "people" }) {
  * every row written before the backend started resolving one. So this degrades
  * to exactly today's appearance rather than to a blank circle.
  */
-type GlyphType = "shield" | "star" | "package" | "ban" | "arrow-left" | "coin" | "x" | "check" | "gift";
+type GlyphType = "shield" | "star" | "package" | "ban" | "arrow-left" | "coin" | "x" | "check" | "gift" | "people";
 
 /** The glyph shapes, shared by the full tile and the small overlay badge. */
 function glyphPath(type: GlyphType): ReactNode {
@@ -2071,6 +2095,13 @@ function glyphPath(type: GlyphType): ReactNode {
       return <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
     case "check":
       return <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />;
+    case "people":
+      return (
+        <g stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9" cy="8" r="3.5" />
+          <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5" />
+        </g>
+      );
     case "gift":
       return (
         <g stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
