@@ -136,6 +136,11 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
       }
     }
 
+    // The morning after an event (contacts-v2.md): the people you added
+    // there are in Contacts, where the note goes.
+    case "CONTACTS_MORNING_AFTER":
+      return "/contacts";
+
     // The receipt, the invoice and the download link all live together.
     case "PURCHASE_COMPLETED":
     case "REFUND_COMPLETED":

@@ -4,6 +4,11 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.24.0 — 2026-11-20
+
+### Added
+- **The morning after an event** (backend contacts-v2): `CONTACTS_MORNING_AFTER` ("You met 3 people at Business Talks #60. Add a note while it's fresh.", or names the one person) opens Contacts. A new `people` glyph for it.
+
 ## 1.23.1 — 2026-11-18
 
 ### Fixed
