@@ -166,7 +166,8 @@ describe("gifts", () => {
     expect(destinationFor({ type: "ITEM_ADDED", payload: {} })).toBeNull();
     // A badge unlocked opens their own profile (profile-badges.md).
     expect(destinationFor({ type: "BADGE_EARNED", payload: { url: "https://pbn.cobuntu.com/members/diogo" } })).toBe("/members/diogo");
-    expect(destinationFor({ type: "CONTACTS_MORNING_AFTER", payload: { eventId: "e1" } })).toBe("/contacts");
+    expect(destinationFor({ type: "CONTACTS_MORNING_AFTER", payload: { eventId: "e1" } })).toBe("/contacts/met/e1");
+    expect(destinationFor({ type: "CONTACTS_MORNING_AFTER", payload: {} })).toBe("/contacts");
   });
 });
 

@@ -4,6 +4,11 @@ All notable changes to `@cobuntu/notifications-ui`.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semver](https://semver.org/spec/v2.0.0.html).
 
+## 1.24.1 — 2026-11-20
+
+### Changed
+- `CONTACTS_MORNING_AFTER` opens the people you added at that event (`/contacts/met/<eventId>`), and Contacts only when the payload has no event.
+
 ## 1.24.0 — 2026-11-20
 
 ### Added

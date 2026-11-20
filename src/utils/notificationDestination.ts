@@ -136,10 +136,12 @@ export function destinationFor({ type, payload }: DestinationInput): string | nu
       }
     }
 
-    // The morning after an event (contacts-v2.md): the people you added
-    // there are in Contacts, where the note goes.
-    case "CONTACTS_MORNING_AFTER":
-      return "/contacts";
+    // The morning after an event (contacts-v2.md): the screen of the people
+    // you added there, each with a note to fill in. Contacts without an event.
+    case "CONTACTS_MORNING_AFTER": {
+      const eventId = str(payload.eventId);
+      return eventId ? `/contacts/met/${encodeURIComponent(eventId)}` : "/contacts";
+    }
 
     // The receipt, the invoice and the download link all live together.
     case "PURCHASE_COMPLETED":
